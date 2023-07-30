@@ -1,5 +1,5 @@
 {
-	"name": "backend",
+	"name": "fivembattleroyale",
 	"version": "1.0.0",
 	"description": "",
 	"main": "index.js",
@@ -13,6 +13,7 @@
 	"author": "",
 	"license": "ISC",
 	"dependencies": {
+		"@prisma/client": "^5.0.0",
 		"@types/cors": "^2.8.13",
 		"@types/express": "^4.17.17",
 		"@types/express-session": "^1.17.7",
