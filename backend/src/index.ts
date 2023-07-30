@@ -1,7 +1,7 @@
-const express = require('express');
-const session = require('express-session');
-const passport = require('passport');
-const SteamStrategy = require('passport-steam').Strategy;
+import express from 'express';
+import session from 'express-session';
+import passport from 'passport';
+import { Strategy as SteamStrategy } from 'passport-steam';
 
 const app = express();
 
@@ -23,7 +23,7 @@ passport.use(
 			realm: 'http://localhost:5000/',
 			apiKey: '34042001284764C5459C933A1457F0CF', // Substitua pelo valor da sua Steam API Key.
 		},
-		(identifier, profile, done) => {
+		(identifier: any, profile: any, done: any) => {
 			process.nextTick(() => {
 				profile.identifier = identifier;
 				return done(null, profile);
@@ -32,18 +32,18 @@ passport.use(
 	)
 );
 
-passport.serializeUser((user, done) => {
+passport.serializeUser((user: Express.User, done) => {
 	done(null, user);
 });
 
-passport.deserializeUser((obj, done) => {
+passport.deserializeUser((obj: any, done: any) => {
 	done(null, obj);
 });
 
 app.get(
 	'/auth/steam',
 	passport.authenticate('steam', { failureRedirect: '/' }),
-	(req, res) => {
+	(req: express.Request, res: express.Response) => {
 		res.redirect('/');
 	}
 );
@@ -51,7 +51,7 @@ app.get(
 app.get(
 	'/auth/steam/return',
 	passport.authenticate('steam', { failureRedirect: '/' }),
-	(req, res) => {
+	(req: express.Request, res: express.Response) => {
 		// Aqui, req.user contém o perfil do usuário autenticado.
 		console.log(req.user);
 
