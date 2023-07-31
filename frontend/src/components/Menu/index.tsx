@@ -11,7 +11,14 @@ import { FiLogOut } from 'react-icons/fi';
 
 import * as S from './styles';
 
-export const MenuContainer = ({ userData }) => {
+export const MenuContainer = ({ userData }: any) => {
+	// TODOO: criar contexto para compartilhar os dados do userData
+
+	function signOut() {
+		localStorage.clear();
+		window.location.reload();
+	}
+
 	return (
 		<>
 			<S.MenuContainer>
@@ -33,14 +40,11 @@ export const MenuContainer = ({ userData }) => {
 			</S.MenuContainer>
 
 			<S.AvatarCardContainer>
-				<S.AvatarImage
-					src={userData?.photos[userData?.photos.length - 1].value}
-					alt='User Avatar'
-				/>
-				<S.AvatarName>{userData?.displayName}</S.AvatarName>
-				<p>Steam ID: {userData?.id}</p>
+				<S.AvatarImage src={userData?.avatar} alt='User Avatar' />
+				<S.AvatarName>{userData?.personaName}</S.AvatarName>
+				<p>Steam ID: {userData?.steamId}</p>
 
-				<S.LogoutButton>
+				<S.LogoutButton onClick={() => signOut()}>
 					<S.LogoutIconContainer>
 						<FiLogOut size={24} color='#5e39cc' />
 					</S.LogoutIconContainer>

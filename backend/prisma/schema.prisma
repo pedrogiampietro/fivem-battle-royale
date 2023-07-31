@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,4 +5,93 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+
+enum GameType {
+  SOLO
+  DUO
+  SQUAD
+}
+
+enum MatchStatus {
+  WAITING
+  ONGOING
+  FINISHED
+}
+
+model User {
+  id            String        @id @default(uuid())
+  steamId       String        @unique
+  personaName   String
+  avatar        String
+  realName      String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  groupMembers  GroupMember[]
+  inventories   Inventory[]
+  playerStats   PlayerStats[]
+}
+
+model Group {
+  id            String        @id @default(uuid())
+  name          String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  groupMembers  GroupMember[]
+}
+
+model Inventory {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  item       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Match {
+  id            String        @id @default(uuid())
+  gameType      GameType
+  status        MatchStatus
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  groupMembers  GroupMember[]
+  friendGroupId String?       @unique
+  roomId        String?       @unique
+  gameHistory   GameHistory[]
+}
+
+model GameHistory {
+  id          String        @id @default(uuid())
+  matchId     String
+  match       Match         @relation(fields: [matchId], references: [id])
+  playerStats PlayerStats[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model PlayerStats {
+  id           String       @id @default(uuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id])
+  gameHistory  GameHistory  @relation(fields: [gameHistoryId], references: [id])
+  gameHistoryId String
+  kills        Int
+  deaths       Int
+  assists      Int
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model GroupMember {
+  userId    String
+  user      User   @relation(fields: [userId], references: [id])
+  groupId   String
+  group     Group  @relation(fields: [groupId], references: [id])
+  matchId   String? 
+  match     Match?  @relation(fields: [matchId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@id([userId, groupId])
 }

@@ -15,7 +15,7 @@ const App = () => {
 	const [userData, setUserData] = useState(null);
 	const [isLoading, setIsLoading] = useState(false);
 
-	const handleSteamLoginSuccess = (data) => {
+	const handleSteamLoginSuccess = (data: any) => {
 		setUserData(data);
 		setIsLoading(false);
 	};
