@@ -7,17 +7,12 @@ import { GameType } from '../../enums/GameType';
 export const Group = ({ userData }: any) => {
 	const [expandedCard, setExpandedCard] = useState<number | null>(null);
 	const [playerReady, setPlayerReady] = useState(false);
-	const { setMatchmakingStatus } = useMatchmaking();
 
 	const handleToggleCard = (cardIndex: number) => {
 		setExpandedCard((prevExpandedCard) =>
 			prevExpandedCard === cardIndex ? null : cardIndex
 		);
 	};
-
-	useEffect(() => {
-		setMatchmakingStatus(playerReady);
-	}, [playerReady, setMatchmakingStatus]);
 
 	const isOwner = true;
 

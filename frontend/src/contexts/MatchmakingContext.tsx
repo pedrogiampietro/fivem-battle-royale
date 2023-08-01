@@ -2,93 +2,114 @@ import React, {
 	createContext,
 	useState,
 	useCallback,
-	useContext,
 	useEffect,
+	useContext,
 	useRef,
 } from 'react';
 import { apiClient } from '../services/api';
 import { GameType } from '../enums/GameType';
-
-import { io, Socket } from 'socket.io-client';
+import { Socket, io } from 'socket.io-client';
 
 interface MatchmakingContextData {
 	match: any;
-	setMatchmakingStatus: (status: boolean) => void;
-	startMatchmaking: any;
+	matchmakingCounters: { SOLO: number; DUO: number; SQUAD: number };
+	startMatchmaking: (gameType: GameType) => Promise<void>;
+	isFindingMatch: boolean;
+	setIsFindingMatch: any;
+	cancelMatchmaking: any;
 }
 
 interface PropsI {
 	children: React.ReactNode;
 }
 
-interface UserDataI {
-	avatar: string;
-	createdAt: string;
-	id: string;
-	personaName: string;
-	realName: string;
-	steamId: string;
-	updatedAt: string;
-}
-
-type NullableUser = UserDataI | null;
-
 const MatchmakingContext = createContext<MatchmakingContextData>(
 	{} as MatchmakingContextData
 );
 
 export const MatchmakingProvider: React.FC<PropsI> = ({ children }) => {
+	const [isFindingMatch, setIsFindingMatch] = useState(false);
 	const [match, setMatch] = useState<any>(null);
-	const [userData, setUserData] = useState<UserDataI | null>(null);
-
+	const [matchmakingCounters, setMatchmakingCounters] = useState({
+		SOLO: 0,
+		DUO: 0,
+		SQUAD: 0,
+	});
 	const socketRef = useRef<Socket | null>(null);
+	const isFindingMatchRef = useRef(false); // Use useRef to persist isFindingMatch across renders
 
-	const setMatchmakingStatus = useCallback(async (status: boolean) => {
+	const startMatchmaking = useCallback(
+		async (gameType: GameType) => {
+			if (isFindingMatch) return; // Return early if already finding match
+
+			const user = JSON.parse(localStorage.getItem('userData') || '{}');
+			if (!user.id)
+				throw new Error('You need to login before starting matchmaking');
+
+			setIsFindingMatch(true);
+			try {
+				await new Promise<void>(
+					(resolve) => setTimeout(resolve, 500) // Add a 500 ms delay before starting matchmaking
+				);
+
+				const response = await apiClient().post(
+					'/matchmaking/addPlayerToMatchmaking',
+					{ userId: user.id, gameType }
+				);
+				const parsedResponse = JSON.parse(response.data);
+				setMatch(parsedResponse.match);
+			} catch (error) {
+				console.error('Failed to start matchmaking:', error);
+			} finally {
+				setIsFindingMatch(false);
+			}
+		},
+		[isFindingMatch]
+	); // Include isFindingMatch as a dependency for useCallback
+
+	const cancelMatchmaking = useCallback(async () => {
+		if (isFindingMatch || !match) return; // Return early if not finding match or match is null
+
+		const user = JSON.parse(localStorage.getItem('userData') || '{}');
+		if (!user.id)
+			throw new Error('You need to login before canceling matchmaking');
+
+		setIsFindingMatch(true);
 		try {
-			// Implement your matchmaking logic here.
-			// For example, you could make a request to your backend API.
-			// const response = await api.post('/matchmaking', { status });
-			// setMatch(response.data);
-			// For this simplified example, we just set the match to a static value
-			// if (status) {
-			// 	setMatch({ id: 'match-id', players: [], status: 'WAITING' });
-			// } else {
-			// 	setMatch(null);
-			// }
-		} catch (err) {
-			console.error(err);
-		}
-	}, []);
-
-	const startMatchmaking = useCallback(async (gameType: GameType) => {
-		const getUser = localStorage.getItem('userData');
-		let user: NullableUser = null;
-
-		if (getUser) {
-			user = JSON.parse(getUser);
-		}
-
-		if (!user) {
-			throw new Error('You need to login before starting matchmaking');
-		}
-
-		try {
-			const response = await apiClient().post(
-				'/matchmaking/addPlayerToMatchmaking',
-				{
-					userId: user.id,
-					gameType: gameType,
-				}
+			await new Promise<void>(
+				(resolve) => setTimeout(resolve, 500) // Add a 500 ms delay before canceling matchmaking
 			);
 
-			// Analise a string JSON em `data` para obter um objeto JSON
-			const parsedResponse = JSON.parse(response.data);
-
-			// Use a propriedade `match` do objeto JSON analisado
-			setMatch(parsedResponse.match);
+			await apiClient().post('/matchmaking/cancelMatchmaking', {
+				userId: user.id,
+			});
+			setMatch(null);
 		} catch (error) {
-			console.error('Failed to start matchmaking:', error);
+			console.error('Failed to cancel matchmaking:', error);
+		} finally {
+			setIsFindingMatch(false);
 		}
+	}, [isFindingMatch, match]);
+
+	const handleSocketEvents = useCallback((socket: Socket) => {
+		socket.on('game-started', (data) => console.log('Game started:', data));
+		socket.on('player-added', (data) =>
+			console.log('A player has been added to the match:', data)
+		);
+		socket.on('player-left', (data) =>
+			console.log('A player has left the match:', data)
+		);
+
+		socket.on('matchmakingCountersChanged', (data) => {
+			console.log('Received matchmakingCountersChanged event:', data);
+
+			// Atualiza os contadores corretamente para cada tipo de jogo
+			setMatchmakingCounters((prevCounters) => ({
+				SOLO: data.SOLO !== undefined ? data.SOLO : prevCounters.SOLO,
+				DUO: data.DUO !== undefined ? data.DUO : prevCounters.DUO,
+				SQUAD: data.SQUAD !== undefined ? data.SQUAD : prevCounters.SQUAD,
+			}));
+		});
 	}, []);
 
 	useEffect(() => {
@@ -96,35 +117,27 @@ export const MatchmakingProvider: React.FC<PropsI> = ({ children }) => {
 			socketRef.current = io('http://localhost:5000', {
 				withCredentials: true,
 			});
-
-			// Quando o evento 'game-started' é emitido, atualize a partida
-			socketRef.current.on('game-started', () => {
-				// Atualize o estado da partida aqui
-				console.log('O jogo começou!');
-			});
-
-			// Quando o evento 'player-added' é emitido, atualize a partida
-			socketRef.current.on('player-added', (data) => {
-				// Atualize o estado da partida aqui
-				console.log('Um jogador foi adicionado ao matchmaking:', data);
-				// Aqui você pode adicionar a lógica para atualizar o estado `match` com a nova informação
-			});
-
-			// Enviar evento 'join-room' quando um jogador inicia o matchmaking
-			socketRef.current.emit('join-room', match.id);
-		} else if (!match && socketRef.current) {
+			socketRef.current.emit('game-started', match.id);
+			handleSocketEvents(socketRef.current);
+		} else if (socketRef.current) {
 			socketRef.current.disconnect();
+			socketRef.current = null;
 		}
-
-		// Limpeza na desmontagem
 		return () => {
 			if (socketRef.current) socketRef.current.disconnect();
 		};
-	}, [match]);
+	}, [match, handleSocketEvents]);
 
 	return (
 		<MatchmakingContext.Provider
-			value={{ match, setMatchmakingStatus, startMatchmaking }}
+			value={{
+				match,
+				matchmakingCounters,
+				startMatchmaking,
+				isFindingMatch,
+				setIsFindingMatch,
+				cancelMatchmaking,
+			}}
 		>
 			{children}
 		</MatchmakingContext.Provider>
@@ -133,8 +146,7 @@ export const MatchmakingProvider: React.FC<PropsI> = ({ children }) => {
 
 export function useMatchmaking(): MatchmakingContextData {
 	const context = useContext(MatchmakingContext);
-	if (!context) {
+	if (!context)
 		throw new Error('useMatchmaking must be used within a MatchmakingProvider');
-	}
 	return context;
 }
