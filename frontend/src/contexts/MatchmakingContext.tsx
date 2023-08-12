@@ -17,6 +17,7 @@ interface MatchmakingContextData {
 	isFindingMatch: boolean;
 	setIsFindingMatch: any;
 	cancelMatchmaking: any;
+	loading: any;
 }
 
 interface PropsI {
@@ -29,6 +30,7 @@ const MatchmakingContext = createContext<MatchmakingContextData>(
 
 export const MatchmakingProvider: React.FC<PropsI> = ({ children }) => {
 	const [isFindingMatch, setIsFindingMatch] = useState(false);
+	const [loading, setLoading] = useState(false);
 	const [match, setMatch] = useState<any>(null);
 	const [matchmakingCounters, setMatchmakingCounters] = useState({
 		SOLO: 0,
@@ -36,60 +38,79 @@ export const MatchmakingProvider: React.FC<PropsI> = ({ children }) => {
 		SQUAD: 0,
 	});
 	const socketRef = useRef<Socket | null>(null);
-	const isFindingMatchRef = useRef(false); // Use useRef to persist isFindingMatch across renders
 
-	const startMatchmaking = useCallback(
-		async (gameType: GameType) => {
-			if (isFindingMatch) return; // Return early if already finding match
-
-			const user = JSON.parse(localStorage.getItem('userData') || '{}');
-			if (!user.id)
-				throw new Error('You need to login before starting matchmaking');
-
-			setIsFindingMatch(true);
-			try {
-				await new Promise<void>(
-					(resolve) => setTimeout(resolve, 500) // Add a 500 ms delay before starting matchmaking
-				);
-
-				const response = await apiClient().post(
-					'/matchmaking/addPlayerToMatchmaking',
-					{ userId: user.id, gameType }
-				);
-				const parsedResponse = JSON.parse(response.data);
-				setMatch(parsedResponse.match);
-			} catch (error) {
-				console.error('Failed to start matchmaking:', error);
-			} finally {
-				setIsFindingMatch(false);
-			}
-		},
-		[isFindingMatch]
-	); // Include isFindingMatch as a dependency for useCallback
-
-	const cancelMatchmaking = useCallback(async () => {
-		if (isFindingMatch || !match) return; // Return early if not finding match or match is null
-
+	const startMatchmaking = async (gameType: any) => {
 		const user = JSON.parse(localStorage.getItem('userData') || '{}');
-		if (!user.id)
-			throw new Error('You need to login before canceling matchmaking');
+		console.log('user', user);
 
-		setIsFindingMatch(true);
+		if (!user.id)
+			throw new Error('You need to login before starting matchmaking');
+
+		console.log('Iniciando matchmaking para:', gameType);
+		setLoading(true); // Inicia o loading
+
 		try {
-			await new Promise<void>(
-				(resolve) => setTimeout(resolve, 500) // Add a 500 ms delay before canceling matchmaking
+			// Lógica para iniciar o matchmaking
+			// Chama a API do servidor para adicionar o jogador ao matchmaking
+			const response = await apiClient().post(
+				'/matchmaking/addPlayerToMatchmaking',
+				{
+					userId: user.id,
+					gameType,
+				}
 			);
 
-			await apiClient().post('/matchmaking/cancelMatchmaking', {
-				userId: user.id,
-			});
-			setMatch(null);
-		} catch (error) {
-			console.error('Failed to cancel matchmaking:', error);
+			console.log('Resposta da API para iniciar matchmaking:', response.data);
+
+			if (response.data && !response.data.error) {
+				setIsFindingMatch(true);
+			} else {
+				// Tratar erro aqui, se necessário
+			}
+		} catch (err: any) {
+			console.log('Erro ao chamar API:', err.message);
+
+			// Tratar erros de rede ou outros erros aqui
 		} finally {
-			setIsFindingMatch(false);
+			setLoading(false); // Finaliza o loading
 		}
-	}, [isFindingMatch, match]);
+	};
+
+	const cancelMatchmaking = async (gameType: any) => {
+		const user = JSON.parse(localStorage.getItem('userData') || '{}');
+
+		if (!user.id)
+			throw new Error('You need to login before starting matchmaking');
+
+		console.log('Cancelando matchmaking.');
+
+		setLoading(true); // Inicia o loading
+		try {
+			// Lógica para cancelar o matchmaking
+			// Chama a API do servidor para remover o jogador do matchmaking
+			const response = await apiClient().post(
+				'/matchmaking/cancelMatchmaking',
+				{
+					userId: user.id,
+					gameType,
+				}
+			);
+
+			console.log('Resposta da API para cancelar matchmaking:', response.data);
+
+			if (response.data && !response.data.error) {
+				setIsFindingMatch(false);
+			} else {
+				// Tratar erro aqui, se necessário.
+			}
+		} catch (err: any) {
+			console.log('Erro ao chamar API:', err.message);
+
+			// Tratar erros de rede ou outros erros aqui
+		} finally {
+			setLoading(false); // Finaliza o loading
+		}
+	};
 
 	const handleSocketEvents = useCallback((socket: Socket) => {
 		socket.on('game-started', (data) => console.log('Game started:', data));
@@ -113,18 +134,29 @@ export const MatchmakingProvider: React.FC<PropsI> = ({ children }) => {
 	}, []);
 
 	useEffect(() => {
+		console.log('Establishing socket connection.');
+
+		// Estabelecendo conexão com o socket
+		socketRef.current = io('http://localhost:5000', {
+			withCredentials: true,
+		});
+
+		// Ouvindo eventos
+		handleSocketEvents(socketRef.current);
+
+		// Se o match é definido, emitimos o 'game-started' evento
 		if (match) {
-			socketRef.current = io('http://localhost:5000', {
-				withCredentials: true,
-			});
 			socketRef.current.emit('game-started', match.id);
-			handleSocketEvents(socketRef.current);
-		} else if (socketRef.current) {
-			socketRef.current.disconnect();
-			socketRef.current = null;
+			console.log('Emitting game-started with match id:', match.id);
 		}
+
+		// Limpando o socket na desmontagem
 		return () => {
-			if (socketRef.current) socketRef.current.disconnect();
+			console.log('Disconnecting socket.');
+			if (socketRef.current) {
+				socketRef.current.disconnect();
+				socketRef.current = null;
+			}
 		};
 	}, [match, handleSocketEvents]);
 
@@ -137,6 +169,7 @@ export const MatchmakingProvider: React.FC<PropsI> = ({ children }) => {
 				isFindingMatch,
 				setIsFindingMatch,
 				cancelMatchmaking,
+				loading,
 			}}
 		>
 			{children}

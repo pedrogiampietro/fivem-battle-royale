@@ -36,27 +36,20 @@ const matchmakings = [
 
 export const PlayerCard = () => {
 	const {
-		match,
 		startMatchmaking,
 		matchmakingCounters,
 		isFindingMatch,
-		setIsFindingMatch,
 		cancelMatchmaking,
+		loading,
 	} = useMatchmaking();
 
-	console.log('matchmakingCounters', matchmakingCounters);
-	console.log('isFindingMatch', isFindingMatch);
-
-	const handleMatchmaking = async () => {
+	const handleMatchmaking = async (gameType: GameType) => {
 		if (isFindingMatch) {
 			// Se já estiver buscando partida, cancela a fila
-			setIsFindingMatch(false);
-			// Chama uma função para cancelar a busca de partida no servidor
-			await cancelMatchmaking(); // Você deve implementar a função `cancelMatchmaking`
+			await cancelMatchmaking(gameType);
 		} else {
 			// Se não estiver buscando partida, inicia a busca
-			setIsFindingMatch(true);
-			await startMatchmaking(GameType.SOLO);
+			await startMatchmaking(gameType);
 		}
 	};
 
@@ -82,9 +75,16 @@ export const PlayerCard = () => {
 							<S.InfoLabel>Tamanho do time</S.InfoLabel>
 							<S.InfoData>{matchmaking.size} Pessoas</S.InfoData>
 						</S.InfoPair>
-						<S.Button onClick={handleMatchmaking} disabled={isFindingMatch}>
-							{isFindingMatch ? 'Cancelar Fila' : 'Buscar Partida'}
-						</S.Button>
+						<button
+							disabled={loading}
+							onClick={() => handleMatchmaking(matchmaking.gameType)}
+						>
+							{loading
+								? 'Loading...'
+								: isFindingMatch
+								? 'Cancelar Busca'
+								: 'Buscar Partida'}
+						</button>
 					</S.MatchmakingInfo>
 				</S.Card>
 			))}

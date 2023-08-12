@@ -7,7 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
 enum GameType {
   SOLO
   DUO
@@ -21,33 +20,33 @@ enum MatchStatus {
 }
 
 model User {
-  id            String        @id @default(uuid())
-  steamId       String        @unique
-  personaName   String
-  avatar        String
-  realName      String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  groupMembers  GroupMember[]
-  inventories   Inventory[]
-  playerStats   PlayerStats[]
+  id           String        @id @default(uuid())
+  steamId      String        @unique
+  personaName  String
+  avatar       String
+  realName     String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  groupMembers GroupMember[]
+  inventories  Inventory[]
+  playerStats  PlayerStats[]
 }
 
 model Group {
-  id            String        @id @default(uuid())
-  name          String
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  groupMembers  GroupMember[]
+  id           String        @id @default(uuid())
+  name         String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  groupMembers GroupMember[]
 }
 
 model Inventory {
-  id         String   @id @default(uuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id])
-  item       String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  item      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Match {
@@ -72,25 +71,25 @@ model GameHistory {
 }
 
 model PlayerStats {
-  id           String       @id @default(uuid())
-  userId       String
-  user         User         @relation(fields: [userId], references: [id])
-  gameHistory  GameHistory  @relation(fields: [gameHistoryId], references: [id])
+  id            String      @id @default(uuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+  gameHistory   GameHistory @relation(fields: [gameHistoryId], references: [id])
   gameHistoryId String
-  kills        Int
-  deaths       Int
-  assists      Int
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  kills         Int
+  deaths        Int
+  assists       Int
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 }
 
 model GroupMember {
   userId    String
-  user      User   @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
   groupId   String
-  group     Group  @relation(fields: [groupId], references: [id])
-  matchId   String? 
-  match     Match?  @relation(fields: [matchId], references: [id])
+  group     Group    @relation(fields: [groupId], references: [id])
+  matchId   String?
+  match     Match?   @relation(fields: [matchId], references: [id])
   createdAt DateTime @default(now())
 
   @@id([userId, groupId])

@@ -29,13 +29,19 @@ const matchmakingQueue: { [key in GameType]: string[] } = {
 router.post('/addPlayerToMatchmaking', async (request, response) => {
 	try {
 		const { userId } = request.body;
-		let gameType: GameType = request.body.gameType as GameType;
+		const gameType: GameType = request.body.gameType as GameType;
 
 		console.log(
 			`Received request to add player ${userId} to matchmaking for gameType ${gameType}`
 		);
 
-		let groupId: string | undefined;
+		if (!matchmakingQueue[gameType]) {
+			return response.status(400).json({ error: 'Invalid gameType provided.' });
+		}
+
+		matchmakingQueue[gameType].push(userId);
+
+		let groupId: string | null = null;
 
 		if (gameType !== GameType.SOLO) {
 			const userGroup = await prisma.groupMember.findFirst({
@@ -47,7 +53,7 @@ router.post('/addPlayerToMatchmaking', async (request, response) => {
 				},
 			});
 
-			groupId = userGroup?.group?.id;
+			groupId = userGroup?.group?.id || null;
 
 			if (!groupId) {
 				return response.status(404).json({ error: "User's group not found" });
@@ -77,6 +83,7 @@ router.post('/addPlayerToMatchmaking', async (request, response) => {
 			return response.status(400).json({ error: 'Match is already full' });
 		}
 
+		// Se não encontrou um match esperando, crie um novo
 		if (!match) {
 			console.log(
 				`No match found, creating a new match for gameType ${gameType}`
@@ -92,53 +99,55 @@ router.post('/addPlayerToMatchmaking', async (request, response) => {
 				},
 			});
 
-			io.to(match.id).emit('player-added', {
-				userId,
-				gameType,
-			});
-
+			io.to(match.id).emit('player-added', { userId, gameType });
 			console.log(`Player ${userId} added to match ${match.id}`);
 		}
 
+		// Se o tipo do jogo for DUO ou SQUAD e o usuário tiver um grupo
+		if (gameType !== GameType.SOLO && groupId) {
+			console.log(
+				`Attempting to add player ${userId} to match ${match.id} with group ${groupId}`
+			);
+			await prisma.groupMember.create({
+				data: {
+					userId: userId,
+					matchId: match.id,
+					groupId: groupId,
+				},
+			});
+			console.log(
+				`Player ${userId} added to match ${match.id} with group ${groupId}`
+			);
+		} else if (gameType === GameType.SOLO && groupId) {
+			// Se o tipo de jogo for SOLO
+			await prisma.groupMember.create({
+				data: {
+					userId: userId,
+					matchId: match.id,
+					groupId: groupId,
+				},
+			});
+			console.log(`Solo player ${userId} added to match ${match.id}`);
+		}
+
 		matchmakingCounters[gameType] += 1;
+		console.log(
+			`Emitting event for updated matchmaking counter for ${gameType}`
+		);
 		io.emit('matchmakingCountersChanged', matchmakingCounters);
 
 		if (match.groupMembers.length + 1 === 64) {
-			const roomId = uuidv4(); // generate a new unique roomId
-
+			const roomId = uuidv4();
 			await prisma.match.update({
-				where: {
-					id: match.id,
-				},
-				data: {
-					status: MatchStatus.ONGOING,
-					roomId: roomId,
-				},
+				where: { id: match.id },
+				data: { status: MatchStatus.ONGOING, roomId: roomId },
 			});
-
-			// Send "game started" event to all players in the match
 			io.to(roomId).emit('game-started');
-		}
-
-		let groupMember;
-		if (gameType !== GameType.SOLO && groupId) {
-			groupMember = await prisma.groupMember.update({
-				where: {
-					userId_groupId: {
-						userId: userId,
-						groupId: groupId,
-					},
-				},
-				data: {
-					matchId: match.id,
-				},
-			});
 		}
 
 		return response.status(200).json({
 			message: 'User added to matchmaking',
 			match: match,
-			groupMember: groupMember,
 			error: false,
 		});
 	} catch (err: any) {
@@ -150,27 +159,65 @@ router.post('/addPlayerToMatchmaking', async (request, response) => {
 router.post('/cancelMatchmaking', async (request, response) => {
 	try {
 		const { userId } = request.body;
+		let gameType: GameType = request.body.gameType as GameType;
 
-		console.log(`Received request to cancel matchmaking for user ${userId}`);
+		if (!matchmakingQueue[gameType]) {
+			return response.status(400).json({ error: 'Invalid gameType provided.' });
+		}
 
-		// Aqui você deve adicionar a lógica para remover o jogador da fila de matchmaking
-		// e decrementar o contador de matchmaking correspondente no servidor
-
-		// Lógica para remover o jogador da fila de matchmaking
-		const gameTypeToRemoveFrom = GameType.SQUAD; // Substitua pelo tipo de jogo correto
-		const playerIndex = matchmakingQueue[gameTypeToRemoveFrom].findIndex(
+		const playerIndex = matchmakingQueue[gameType].findIndex(
 			(playerId) => playerId === userId
 		);
 
 		if (playerIndex !== -1) {
-			matchmakingQueue[gameTypeToRemoveFrom].splice(playerIndex, 1);
+			matchmakingQueue[gameType].splice(playerIndex, 1);
+			matchmakingCounters[gameType] -= 1;
+			io.emit('matchmakingCountersChanged', matchmakingCounters);
+		} else {
+			console.log(
+				`User with ID ${userId} was not found in matchmaking queue for gameType ${gameType}`
+			);
 		}
 
-		// Lógica para decrementar o contador de matchmaking correspondente
-		matchmakingCounters[gameTypeToRemoveFrom] =
-			(matchmakingCounters[gameTypeToRemoveFrom] || 0) - 1;
+		// Retrieve the Match IDs associated with the user and game type through GroupMember
+		const associatedMatches = await prisma.groupMember.findMany({
+			where: {
+				userId: userId,
+				match: {
+					gameType: gameType,
+					status: 'WAITING',
+				},
+			},
+			select: {
+				matchId: true,
+			},
+		});
 
-		io.emit('matchmakingCountersChanged', matchmakingCounters);
+		const matchIds = associatedMatches
+			.map((match) => match.matchId)
+			.filter((id) => id !== null) as string[];
+
+		console.log('Match IDs to be deleted:', matchIds);
+
+		// Actual Deletion
+		const deleteResult = await prisma.match.deleteMany({
+			where: {
+				id: {
+					in: matchIds,
+				},
+			},
+		});
+
+		console.log(
+			`Delete Result for userId ${userId} and gameType ${gameType}:`,
+			deleteResult
+		);
+
+		if (deleteResult.count === 0) {
+			console.log(
+				'No records were deleted. Investigate the conditions and the current state of the database.'
+			);
+		}
 
 		return response.status(200).json({
 			message: 'Matchmaking canceled',
