@@ -18,6 +18,8 @@ interface MatchmakingContextData {
 	setIsFindingMatch: any;
 	cancelMatchmaking: any;
 	loading: any;
+	playerIsReady: any;
+	setPlayerIsReady: any;
 }
 
 interface PropsI {
@@ -37,6 +39,7 @@ export const MatchmakingProvider: React.FC<PropsI> = ({ children }) => {
 		DUO: 0,
 		SQUAD: 0,
 	});
+	const [playerIsReady, setPlayerIsReady] = useState(false);
 	const socketRef = useRef<Socket | null>(null);
 
 	const startMatchmaking = async (gameType: any) => {
@@ -170,6 +173,8 @@ export const MatchmakingProvider: React.FC<PropsI> = ({ children }) => {
 				setIsFindingMatch,
 				cancelMatchmaking,
 				loading,
+				playerIsReady,
+				setPlayerIsReady,
 			}}
 		>
 			{children}

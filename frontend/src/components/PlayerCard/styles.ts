@@ -99,4 +99,18 @@ export const Button = styled.button`
 			rgb(95, 18, 184) 100%
 		);
 	}
+
+	&:disabled {
+		cursor: not-allowed;
+		opacity: 0.6;
+		background: rgba(79, 18, 184, 0.6);
+	}
+
+	&:hover:enabled {
+		background: linear-gradient(
+			91.48deg,
+			rgb(139, 47, 253) 0%,
+			rgb(95, 18, 184) 100%
+		);
+	}
 `;

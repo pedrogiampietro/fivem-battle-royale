@@ -9,6 +9,7 @@ import squadImg from '../../assets/imgs/br-squad.webp';
 import * as S from './styles';
 import { MatchStatus } from '../../enums/MatchStatus';
 import { apiClient } from '../../services/api';
+import { toast } from '../../lib/toast';
 
 const matchmakings = [
 	{
@@ -41,14 +42,23 @@ export const PlayerCard = () => {
 		isFindingMatch,
 		cancelMatchmaking,
 		loading,
+		playerIsReady,
 	} = useMatchmaking();
 
+	const [currentFindingGameType, setCurrentFindingGameType] =
+		React.useState<GameType | null>(null);
+
 	const handleMatchmaking = async (gameType: GameType) => {
-		if (isFindingMatch) {
-			// Se já estiver buscando partida, cancela a fila
+		if (!playerIsReady) {
+			toast.error('Você precisa estar pronto para buscar uma partida.');
+			return;
+		}
+
+		if (isFindingMatch && currentFindingGameType === gameType) {
+			setCurrentFindingGameType(null);
 			await cancelMatchmaking(gameType);
 		} else {
-			// Se não estiver buscando partida, inicia a busca
+			setCurrentFindingGameType(gameType);
 			await startMatchmaking(gameType);
 		}
 	};
@@ -75,16 +85,21 @@ export const PlayerCard = () => {
 							<S.InfoLabel>Tamanho do time</S.InfoLabel>
 							<S.InfoData>{matchmaking.size} Pessoas</S.InfoData>
 						</S.InfoPair>
-						<button
-							disabled={loading}
+						<S.Button
+							disabled={
+								loading ||
+								(isFindingMatch &&
+									currentFindingGameType !== matchmaking.gameType)
+							}
 							onClick={() => handleMatchmaking(matchmaking.gameType)}
 						>
 							{loading
 								? 'Loading...'
-								: isFindingMatch
+								: isFindingMatch &&
+								  currentFindingGameType === matchmaking.gameType
 								? 'Cancelar Busca'
 								: 'Buscar Partida'}
-						</button>
+						</S.Button>
 					</S.MatchmakingInfo>
 				</S.Card>
 			))}

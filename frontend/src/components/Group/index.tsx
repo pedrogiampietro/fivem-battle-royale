@@ -2,11 +2,10 @@ import React, { useState, useEffect } from 'react';
 import * as S from './styles';
 import { FaPlus, FaCheck } from 'react-icons/fa';
 import { useMatchmaking } from '../../contexts/MatchmakingContext';
-import { GameType } from '../../enums/GameType';
 
 export const Group = ({ userData }: any) => {
 	const [expandedCard, setExpandedCard] = useState<number | null>(null);
-	const [playerReady, setPlayerReady] = useState(false);
+	const { playerIsReady, setPlayerIsReady } = useMatchmaking();
 
 	const handleToggleCard = (cardIndex: number) => {
 		setExpandedCard((prevExpandedCard) =>
@@ -30,10 +29,13 @@ export const Group = ({ userData }: any) => {
 							{isOwner && <S.CrownIcon />}
 						</div>
 						<S.StatusButton
-							playerReady={playerReady}
-							onClick={() => setPlayerReady(!playerReady)}
+							playerReady={playerIsReady}
+							onClick={() => {
+								setPlayerIsReady(!playerIsReady);
+								setPlayerIsReady(!playerIsReady);
+							}}
 						>
-							{playerReady && <FaCheck />}
+							{playerIsReady && <FaCheck />}
 							PRONTO
 						</S.StatusButton>
 					</S.PlayerBox>
