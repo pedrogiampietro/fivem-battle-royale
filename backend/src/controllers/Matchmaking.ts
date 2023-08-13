@@ -28,12 +28,10 @@ const matchmakingQueue: { [key in GameType]: string[] } = {
 
 router.post('/addPlayerToMatchmaking', async (request, response) => {
 	try {
-		const { userId } = request.body;
-		const gameType: GameType = request.body.gameType as GameType;
+		console.log('Starting matchmaking for a player...');
 
-		console.log(
-			`Received request to add player ${userId} to matchmaking for gameType ${gameType}`
-		);
+		const { userId } = request.body;
+		const gameType = request.body.gameType as GameType;
 
 		if (!matchmakingQueue[gameType]) {
 			return response.status(400).json({ error: 'Invalid gameType provided.' });
@@ -41,18 +39,13 @@ router.post('/addPlayerToMatchmaking', async (request, response) => {
 
 		matchmakingQueue[gameType].push(userId);
 
+		// Handle Group Logic
 		let groupId: string | null = null;
-
 		if (gameType !== GameType.SOLO) {
 			const userGroup = await prisma.groupMember.findFirst({
-				where: {
-					userId: userId,
-				},
-				select: {
-					group: true,
-				},
+				where: { userId },
+				select: { group: true },
 			});
-
 			groupId = userGroup?.group?.id || null;
 
 			if (!groupId) {
@@ -60,83 +53,23 @@ router.post('/addPlayerToMatchmaking', async (request, response) => {
 			}
 		}
 
-		let match = await prisma.match.findFirst({
-			where: {
-				status: MatchStatus.WAITING,
-				gameType: gameType,
-				groupMembers: {
-					every: {
-						groupId: groupId ? { not: groupId } : undefined,
-					},
-				},
-			},
-			include: {
-				groupMembers: true,
-			},
-		});
+		// Handle Match Logic
+		let match = await findOrCreateMatch(userId, gameType, groupId);
 
-		if (
-			match &&
-			gameType !== GameType.SOLO &&
-			match.groupMembers.length >= (gameType === GameType.DUO ? 2 : 4)
-		) {
-			return response.status(400).json({ error: 'Match is already full' });
-		}
-
-		// Se não encontrou um match esperando, crie um novo
 		if (!match) {
-			console.log(
-				`No match found, creating a new match for gameType ${gameType}`
-			);
-
-			match = await prisma.match.create({
-				data: {
-					gameType: gameType,
-					status: MatchStatus.WAITING,
-				},
-				include: {
-					groupMembers: true,
-				},
-			});
-
-			io.to(match.id).emit('player-added', { userId, gameType });
-			console.log(`Player ${userId} added to match ${match.id}`);
+			return response
+				.status(500)
+				.json({ error: 'Unable to create or find match.' });
 		}
 
-		// Se o tipo do jogo for DUO ou SQUAD e o usuário tiver um grupo
-		if (gameType !== GameType.SOLO && groupId) {
-			console.log(
-				`Attempting to add player ${userId} to match ${match.id} with group ${groupId}`
-			);
-			await prisma.groupMember.create({
-				data: {
-					userId: userId,
-					matchId: match.id,
-					groupId: groupId,
-				},
-			});
-			console.log(
-				`Player ${userId} added to match ${match.id} with group ${groupId}`
-			);
-		} else if (gameType === GameType.SOLO && groupId) {
-			// Se o tipo de jogo for SOLO
-			await prisma.groupMember.create({
-				data: {
-					userId: userId,
-					matchId: match.id,
-					groupId: groupId,
-				},
-			});
-			console.log(`Solo player ${userId} added to match ${match.id}`);
-		}
+		// Create Group Member
+		await createGroupMember(userId, match.id, gameType, groupId);
 
+		// Update Matchmaking Counters & Match Status
 		matchmakingCounters[gameType] += 1;
-		console.log(
-			`Emitting event for updated matchmaking counter for ${gameType}`
-		);
 		io.emit('matchmakingCountersChanged', matchmakingCounters);
 
-		if (match.groupMembers.length + 1 === 64) {
+		if (match.groupMembers && match.groupMembers.length + 1 === 64) {
 			const roomId = uuidv4();
 			await prisma.match.update({
 				where: { id: match.id },
@@ -145,9 +78,11 @@ router.post('/addPlayerToMatchmaking', async (request, response) => {
 			io.to(roomId).emit('game-started');
 		}
 
+		console.log(`User ${userId} added to match ${match.id}`);
+
 		return response.status(200).json({
 			message: 'User added to matchmaking',
-			match: match,
+			match,
 			error: false,
 		});
 	} catch (err: any) {
@@ -155,6 +90,84 @@ router.post('/addPlayerToMatchmaking', async (request, response) => {
 		return response.status(500).json(err);
 	}
 });
+
+async function findOrCreateMatch(
+	userId: string,
+	gameType: GameType,
+	groupId: string | null
+) {
+	console.log(`Finding or creating match for user: ${userId}`);
+
+	let match = await prisma.match.findFirst({
+		where: {
+			status: MatchStatus.WAITING,
+			gameType,
+			NOT: {
+				groupMembers: {
+					some: {
+						userId: userId,
+					},
+				},
+			},
+			groupMembers: {
+				every: {
+					groupId: groupId ? { not: groupId } : undefined,
+				},
+			},
+		},
+		include: { groupMembers: true },
+	});
+
+	if (!match) {
+		match = await prisma.match.create({
+			data: { gameType, status: MatchStatus.WAITING },
+			include: { groupMembers: true },
+		});
+		io.to(match.id).emit('player-added', { userId, gameType });
+	}
+
+	console.log(`Match found/created with ID: ${match.id}`);
+
+	return match;
+}
+
+async function createGroupMember(
+	userId: string,
+	matchId: string,
+	gameType: GameType,
+	groupId: string | null
+) {
+	console.log(`Creating group member for user: ${userId}`);
+
+	const data: any = {
+		GameType: gameType,
+		user: { connect: { id: userId } },
+		match: { connect: { id: matchId } }, // Connect to the match using relation field
+	};
+
+	if (gameType !== GameType.SOLO) {
+		if (!groupId) {
+			console.error(`No groupId provided for non-SOLO gameType: ${gameType}`);
+			throw new Error(`No groupId provided for non-SOLO gameType: ${gameType}`);
+		}
+		data.group = { connect: { id: groupId } };
+	} else {
+		// Fetch the default solo group ID (assuming you've already created it in your database)
+		let defaultSoloGroup = await prisma.group.findFirst({
+			where: { name: 'Default Solo Group' },
+		});
+
+		if (!defaultSoloGroup) {
+			defaultSoloGroup = await prisma.group.create({
+				data: { name: 'Default Solo Group' },
+			});
+		}
+
+		data.group = { connect: { id: defaultSoloGroup.id } };
+	}
+
+	await prisma.groupMember.create({ data });
+}
 
 router.post('/cancelMatchmaking', async (request, response) => {
 	try {
@@ -199,7 +212,22 @@ router.post('/cancelMatchmaking', async (request, response) => {
 
 		console.log('Match IDs to be deleted:', matchIds);
 
-		// Actual Deletion
+		// Delete groupMembers associated with the matches
+		const deleteGroupMemberResult = await prisma.groupMember.deleteMany({
+			where: {
+				userId: userId,
+				matchId: {
+					in: matchIds,
+				},
+			},
+		});
+
+		console.log(
+			`GroupMember Delete Result for userId ${userId} and gameType ${gameType}:`,
+			deleteGroupMemberResult
+		);
+
+		// Actual Deletion of matches
 		const deleteResult = await prisma.match.deleteMany({
 			where: {
 				id: {
@@ -209,13 +237,13 @@ router.post('/cancelMatchmaking', async (request, response) => {
 		});
 
 		console.log(
-			`Delete Result for userId ${userId} and gameType ${gameType}:`,
+			`Match Delete Result for userId ${userId} and gameType ${gameType}:`,
 			deleteResult
 		);
 
 		if (deleteResult.count === 0) {
 			console.log(
-				'No records were deleted. Investigate the conditions and the current state of the database.'
+				'No matches were deleted. Investigate the conditions and the current state of the database.'
 			);
 		}
 

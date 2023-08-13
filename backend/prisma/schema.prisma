@@ -91,6 +91,7 @@ model GroupMember {
   matchId   String?
   match     Match?   @relation(fields: [matchId], references: [id])
   createdAt DateTime @default(now())
+  GameType  GameType
 
   @@id([userId, groupId])
 }
