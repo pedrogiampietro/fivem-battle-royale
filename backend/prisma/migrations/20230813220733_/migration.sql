@@ -4,6 +4,9 @@ CREATE TYPE "GameType" AS ENUM ('SOLO', 'DUO', 'SQUAD');
 -- CreateEnum
 CREATE TYPE "MatchStatus" AS ENUM ('WAITING', 'ONGOING', 'FINISHED');
 
+-- CreateEnum
+CREATE TYPE "InviteStatus" AS ENUM ('PENDING', 'ACCEPTED', 'DECLINED');
+
 -- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
@@ -21,6 +24,7 @@ CREATE TABLE "User" (
 CREATE TABLE "Group" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "gameType" "GameType",
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -85,6 +89,19 @@ CREATE TABLE "GroupMember" (
     CONSTRAINT "GroupMember_pkey" PRIMARY KEY ("userId","groupId")
 );
 
+-- CreateTable
+CREATE TABLE "Invite" (
+    "id" TEXT NOT NULL,
+    "groupId" TEXT NOT NULL,
+    "invitedUserId" TEXT NOT NULL,
+    "inviterUserId" TEXT NOT NULL,
+    "status" "InviteStatus" NOT NULL DEFAULT 'PENDING',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Invite_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_steamId_key" ON "User"("steamId");
 
@@ -114,3 +131,12 @@ ALTER TABLE "GroupMember" ADD CONSTRAINT "GroupMember_groupId_fkey" FOREIGN KEY 
 
 -- AddForeignKey
 ALTER TABLE "GroupMember" ADD CONSTRAINT "GroupMember_matchId_fkey" FOREIGN KEY ("matchId") REFERENCES "Match"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Invite" ADD CONSTRAINT "Invite_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "Group"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Invite" ADD CONSTRAINT "Invite_invitedUserId_fkey" FOREIGN KEY ("invitedUserId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Invite" ADD CONSTRAINT "Invite_inviterUserId_fkey" FOREIGN KEY ("inviterUserId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

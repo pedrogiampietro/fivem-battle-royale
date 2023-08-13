@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
 	FaHome,
 	FaLink,
@@ -7,12 +7,22 @@ import {
 	FaShoppingBag,
 } from 'react-icons/fa';
 
-import { FiLogOut } from 'react-icons/fi';
+import { useGroupRequest } from '../../contexts/ManageInvitesContext';
 
+import { FiLogOut, FiCheck, FiX } from 'react-icons/fi';
 import * as S from './styles';
 
 export const MenuContainer = ({ userData }: any) => {
-	// TODOO: criar contexto para compartilhar os dados do userData
+	const {
+		groupRequests,
+		fetchGroupInvitesRequests,
+		acceptGroupRequest,
+		declineGroupRequest,
+	} = useGroupRequest();
+
+	useEffect(() => {
+		fetchGroupInvitesRequests();
+	}, [fetchGroupInvitesRequests]);
 
 	function signOut() {
 		localStorage.clear();
@@ -50,6 +60,25 @@ export const MenuContainer = ({ userData }: any) => {
 					</S.LogoutIconContainer>
 				</S.LogoutButton>
 			</S.AvatarCardContainer>
+
+			<S.GroupRequestCard>
+				{groupRequests.map((request: any) => (
+					<S.GroupRequestItem key={request.id}>
+						<span>
+							{request.inviterUser.personaName} te convidou para o grupo:{' '}
+							{request.group.name}.
+						</span>
+						<S.ActionButtons>
+							<S.AcceptButton onClick={() => acceptGroupRequest(request.id)}>
+								<FiCheck />
+							</S.AcceptButton>
+							<S.RejectButton onClick={() => declineGroupRequest(request.id)}>
+								<FiX />
+							</S.RejectButton>
+						</S.ActionButtons>
+					</S.GroupRequestItem>
+				))}
+			</S.GroupRequestCard>
 		</>
 	);
 };

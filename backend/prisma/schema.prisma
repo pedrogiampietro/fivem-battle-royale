@@ -19,25 +19,35 @@ enum MatchStatus {
   FINISHED
 }
 
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
 model User {
-  id           String        @id @default(uuid())
-  steamId      String        @unique
-  personaName  String
-  avatar       String
-  realName     String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  groupMembers GroupMember[]
-  inventories  Inventory[]
-  playerStats  PlayerStats[]
+  id              String        @id @default(uuid())
+  steamId         String        @unique
+  personaName     String
+  avatar          String
+  realName        String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  groupMembers    GroupMember[]
+  inventories     Inventory[]
+  playerStats     PlayerStats[]
+  sentInvites     Invite[]      @relation("InviterUserToInvite")
+  receivedInvites Invite[]      @relation("InvitedUserToInvite")
 }
 
 model Group {
   id           String        @id @default(uuid())
   name         String
+  gameType     GameType? // GameType agora está aqui, e é opcional inicialmente
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   groupMembers GroupMember[]
+  Invite       Invite[]
 }
 
 model Inventory {
@@ -91,7 +101,20 @@ model GroupMember {
   matchId   String?
   match     Match?   @relation(fields: [matchId], references: [id])
   createdAt DateTime @default(now())
-  GameType  GameType
+  owner     Boolean?
 
   @@id([userId, groupId])
+}
+
+model Invite {
+  id            String       @id @default(uuid())
+  groupId       String
+  group         Group        @relation(fields: [groupId], references: [id])
+  invitedUserId String
+  invitedUser   User         @relation("InvitedUserToInvite", fields: [invitedUserId], references: [id])
+  inviterUserId String
+  inviterUser   User         @relation("InviterUserToInvite", fields: [inviterUserId], references: [id])
+  status        InviteStatus @default(PENDING)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 }

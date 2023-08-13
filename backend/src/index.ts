@@ -10,15 +10,16 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 import matchMakingController from './controllers/Matchmaking';
+import groupController from './controllers/Group';
 
 const app = express();
 
 app.use(
 	cors({
 		origin: 'http://127.0.0.1:5173', // Reflete o domínio do cliente
-		credentials: true,
-		methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-		allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept'],
+		// credentials: true,
+		// methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+		// allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept'],
 	})
 );
 
@@ -47,6 +48,7 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 app.use('/matchmaking', matchMakingController);
+app.use('/group', groupController);
 
 passport.use(
 	new SteamStrategy(

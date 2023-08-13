@@ -182,3 +182,41 @@ export const NoResultText = styled.p`
 	font-size: 0.9rem;
 	color: #777;
 `;
+
+export const Friend = styled.div`
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 10px 15px;
+	border: 1px solid #e0e0e0;
+	border-radius: 5px;
+	margin-bottom: 10px;
+	background-color: #3f3f46;
+	cursor: pointer;
+	transition: background-color 0.2s;
+
+	&:hover {
+		background-color: #e9e9e9;
+	}
+`;
+
+export const InviteButton = styled.button`
+	background-color: #4caf50;
+	color: #0000;
+	border: none;
+	border-radius: 5px;
+	padding: 5px 10px;
+	font-size: 0.9rem;
+	cursor: pointer;
+	transition: background-color 0.2s;
+	margin: 0 1rem;
+
+	&:hover {
+		background-color: #45a049;
+	}
+
+	&:disabled {
+		background-color: #b2dfdb;
+		cursor: not-allowed;
+	}
+`;

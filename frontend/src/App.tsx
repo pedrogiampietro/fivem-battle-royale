@@ -8,6 +8,7 @@ import { PlayerCard } from './components/PlayerCard';
 import { Inventory } from './components/Inventory';
 
 import bannerImg from './assets/imgs/dash-hero-bg.png';
+import { apiClient } from './services/api';
 
 const LoadingMessage = () => <div>Carregando...</div>;
 
@@ -27,6 +28,20 @@ const App = () => {
 			setUserData(JSON.parse(getUser));
 		}
 	}, []);
+
+	// useEffect(() => {
+	// 	// Fetch pending invites for the user
+	// 	const fetchPendingInvites = async () => {
+	// 		try {
+	// 			const response = await apiClient().get(
+	// 				`/group/invites/pending/${userData.id}`
+	// 			);
+	// 			setPendingInvites(response.data);
+	// 		} catch (error) {
+	// 			console.error('Failed to fetch pending invites:', error);
+	// 		}
+	// 	};
+	// }, [userData.id]);
 
 	return (
 		<>
