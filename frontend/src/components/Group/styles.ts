@@ -220,3 +220,24 @@ export const InviteButton = styled.button`
 		cursor: not-allowed;
 	}
 `;
+
+export const RemoveButton = styled.button`
+	background-color: #f44336; // A red shade for removal actions
+	color: #ffffff; // White text color
+	border: none;
+	border-radius: 5px;
+	padding: 5px 10px;
+	font-size: 0.9rem;
+	cursor: pointer;
+	transition: background-color 0.2s;
+	margin: 0 1rem;
+
+	&:hover {
+		background-color: #d32f2f; // Darker shade of red on hover
+	}
+
+	&:disabled {
+		background-color: #ef9a9a; // Lighter shade of red for disabled state
+		cursor: not-allowed;
+	}
+`;

@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import * as S from './styles';
 import { FaPlus, FaCheck } from 'react-icons/fa';
 import { useMatchmaking } from '../../contexts/MatchmakingContext';
 import { apiClient } from '../../services/api';
+import { Socket, io } from 'socket.io-client';
 
 export const Group = ({ userData }: any) => {
 	const [expandedCard, setExpandedCard] = useState<number | null>(null);
@@ -10,14 +11,49 @@ export const Group = ({ userData }: any) => {
 	const [friendList, setFriendList] = useState<string[]>([]);
 	const [searchValue, setSearchValue] = useState('');
 	const [groupPlayers, setGroupPlayers] = useState<any[]>([]);
+	const [isOwner, setIsOwner] = useState<boolean>(false);
+	const [group, setGroup] = useState([]);
 
-	const isOwner = true;
+	const socketRef = useRef<Socket | null>(null);
 
 	const handleToggleCard = (cardIndex: number) => {
 		setExpandedCard((prevExpandedCard) =>
 			prevExpandedCard === cardIndex ? null : cardIndex
 		);
 	};
+
+	const handleSocketEvents = (socket: Socket) => {
+		socket.on('group-updated', (updatedGroup) => {
+			console.log('Received updated group:', updatedGroup);
+			setGroup(updatedGroup);
+		});
+	};
+
+	useEffect(() => {
+		console.log('Establishing socket connection.');
+
+		// Estabelecendo conexão com o socket
+		socketRef.current = io('http://localhost:5000', {
+			withCredentials: true,
+		});
+
+		socketRef.current.on('connect', () => {
+			console.log('Connected to WebSocket server');
+			handleSocketEvents(socketRef.current!);
+		});
+
+		socketRef.current.on('connect_error', (error) => {
+			console.error('Failed to connect to WebSocket server:', error);
+		});
+
+		return () => {
+			console.log('Disconnecting socket.');
+			if (socketRef.current) {
+				socketRef.current.disconnect();
+				socketRef.current = null;
+			}
+		};
+	}, []);
 
 	useEffect(() => {
 		const fetchGroups = async () => {
@@ -29,6 +65,17 @@ export const Group = ({ userData }: any) => {
 				const data = JSON.parse(response.data);
 
 				setGroupPlayers(data.group.players);
+				setGroup(data.group);
+
+				const ownerPlayer = data.group.players.find(
+					(player: any) => player.owner
+				);
+
+				if (ownerPlayer && ownerPlayer.id === userData.id) {
+					setIsOwner(true);
+				} else {
+					setIsOwner(false);
+				}
 			} catch (error) {
 				console.error('Failed to fetch groups:', error);
 			}
@@ -95,6 +142,29 @@ export const Group = ({ userData }: any) => {
 		}
 	};
 
+	const handleRemovePlayer = async (playerId: string, groupId: string) => {
+		try {
+			const response = await apiClient().delete(`/group/removeFromGroup`, {
+				data: {
+					userId: playerId,
+					groupId: groupId,
+				},
+			});
+
+			if (response.data && response.data.message) {
+				alert(response.data.message);
+				const updatedGroupPlayers = groupPlayers.filter(
+					(player) => player.id !== playerId
+				);
+				setGroupPlayers(updatedGroupPlayers);
+			} else {
+				console.warn('Failed to remove player:', response);
+			}
+		} catch (error) {
+			console.error('Failed to remove player:', error);
+		}
+	};
+
 	useEffect(() => {
 		if (searchValue.trim()) {
 			fetchFriends(searchValue);
@@ -120,12 +190,11 @@ export const Group = ({ userData }: any) => {
 							<div style={{ display: 'flex', alignItems: 'center' }}>
 								<S.Avatar src={player.avatar} alt='player avatar' />
 								<strong>
-									{player.name === userData.name ? 'Você' : player.name}
+									{player.name === userData.personaName ? 'Você' : player.name}
 								</strong>
 								{player.owner && <S.CrownIcon />}
 							</div>
-							{/* Mostrar botão PRONTO apenas para o jogador atual */}
-							{player.name === userData.name && (
+							{player.name === userData.personaName && (
 								<S.StatusButton
 									playerReady={playerIsReady}
 									onClick={() => {
@@ -135,6 +204,14 @@ export const Group = ({ userData }: any) => {
 									{playerIsReady && <FaCheck />}
 									PRONTO
 								</S.StatusButton>
+							)}
+
+							{isOwner && !player.owner && (
+								<S.RemoveButton
+									onClick={() => handleRemovePlayer(player.id, group?.id)}
+								>
+									REMOVER
+								</S.RemoveButton>
 							)}
 						</S.PlayerBox>
 					))}
@@ -151,7 +228,7 @@ export const Group = ({ userData }: any) => {
 								</S.InviteIcon>
 							</S.AddPlayerBox>
 							{expandedCard === index && (
-								<S.CollapseWrapper isOpen={expandedCard === cardIndex}>
+								<S.CollapseWrapper isOpen={expandedCard === index}>
 									<S.SearchPlayersContent>
 										<S.HeaderContent>
 											<strong>CONVIDAR</strong>

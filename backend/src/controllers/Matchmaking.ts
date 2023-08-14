@@ -12,14 +12,12 @@ export enum GameType {
 	SQUAD = 'SQUAD',
 }
 
-// Inicializando contadores de matchmaking
 let matchmakingCounters: { [key in GameType]: number } = {
 	SOLO: 0,
 	DUO: 0,
 	SQUAD: 0,
 };
 
-// No início do arquivo do servidor (antes da definição das rotas)
 const matchmakingQueue: { [key in GameType]: string[] } = {
 	SOLO: [],
 	DUO: [],
@@ -28,145 +26,192 @@ const matchmakingQueue: { [key in GameType]: string[] } = {
 
 router.post('/addPlayerToMatchmaking', async (request, response) => {
 	try {
-		console.log('Starting matchmaking for a player...');
+		console.log('Starting matchmaking...');
 
-		const { userId } = request.body;
-		const gameType = request.body.gameType as GameType;
+		const { players, gameType: rawGameType } = request.body;
+		const gameType = rawGameType as GameType;
+
+		console.log('Starting matchmaking...');
+		console.log('Received players for matchmaking:', request.body.players);
 
 		if (!matchmakingQueue[gameType]) {
-			return response.status(400).json({ error: 'Invalid gameType provided.' });
+			throw new Error('Invalid gameType provided.');
 		}
 
-		matchmakingQueue[gameType].push(userId);
+		players.forEach((player: any) =>
+			matchmakingQueue[gameType].push(player.id)
+		);
 
-		// Handle Group Logic
-		let groupId: string | null = null;
-		if (gameType !== GameType.SOLO) {
-			const userGroup = await prisma.groupMember.findFirst({
-				where: { userId },
-				select: { group: true },
-			});
-			groupId = userGroup?.group?.id || null;
+		const groupId = await getGroupIdForUser(players[0].id, gameType);
+		let match = await findOrCreateMatch(players[0].id, gameType, groupId);
 
-			if (!groupId) {
-				return response.status(404).json({ error: "User's group not found" });
-			}
+		for (const player of players) {
+			await createGroupMemberForMatch(player.id, match.id, groupId);
 		}
 
-		// Handle Match Logic
-		let match = await findOrCreateMatch(userId, gameType, groupId);
-
-		if (!match) {
-			return response
-				.status(500)
-				.json({ error: 'Unable to create or find match.' });
-		}
-
-		// Create Group Member
-		await createGroupMember(userId, match.id, gameType, groupId);
-
-		// Update Matchmaking Counters & Match Status
-		matchmakingCounters[gameType] += 1;
+		// Adjusted this line
+		matchmakingCounters[gameType] += players.length;
 		io.emit('matchmakingCountersChanged', matchmakingCounters);
 
-		if (match.groupMembers && match.groupMembers.length + 1 === 64) {
+		if (
+			match.groupMembers &&
+			match.groupMembers.length + players.length === 64
+		) {
 			const roomId = uuidv4();
 			await prisma.match.update({
 				where: { id: match.id },
-				data: { status: MatchStatus.ONGOING, roomId: roomId },
+				data: { status: MatchStatus.ONGOING, roomId },
 			});
 			io.to(roomId).emit('game-started');
 		}
 
-		console.log(`User ${userId} added to match ${match.id}`);
-
-		return response.status(200).json({
-			message: 'User added to matchmaking',
-			match,
-			error: false,
+		const refreshedMatch = await prisma.match.findFirst({
+			where: { id: match.id },
+			include: { groupMembers: true },
 		});
+
+		console.log('Final state of the match after processing:', refreshedMatch);
+		return response
+			.status(200)
+			.json({ message: 'User added to matchmaking', match });
 	} catch (err: any) {
-		console.log(`Error in addPlayerToMatchmaking: ${err.message}`);
-		return response.status(500).json(err);
+		console.error(`Error in addPlayerToMatchmaking: ${err.message}`);
+		return response.status(500).json({ error: err.message });
 	}
 });
+
+async function getGroupIdForUser(
+	userId: string,
+	gameType: GameType
+): Promise<string | null> {
+	if (gameType === GameType.SOLO) {
+		console.log('Solo game type detected. No groupId needed.');
+		return null;
+	}
+
+	const userGroup = await prisma.groupMember.findFirst({
+		where: { userId },
+		select: { groupId: true },
+	});
+
+	console.log("User's associated groupId:", userGroup?.groupId);
+
+	if (!userGroup?.groupId) {
+		throw new Error("User's group not found");
+	}
+	return userGroup.groupId;
+}
 
 async function findOrCreateMatch(
 	userId: string,
 	gameType: GameType,
 	groupId: string | null
 ) {
-	console.log(`Finding or creating match for user: ${userId}`);
-
 	let match = await prisma.match.findFirst({
 		where: {
 			status: MatchStatus.WAITING,
 			gameType,
-			NOT: {
-				groupMembers: {
-					some: {
-						userId: userId,
-					},
-				},
-			},
+			NOT: { groupMembers: { some: { userId } } },
 			groupMembers: {
-				every: {
-					groupId: groupId ? { not: groupId } : undefined,
-				},
+				every: { groupId: groupId ? { not: groupId } : undefined },
 			},
 		},
 		include: { groupMembers: true },
 	});
 
-	if (!match) {
-		match = await prisma.match.create({
-			data: { gameType, status: MatchStatus.WAITING },
-			include: { groupMembers: true },
-		});
-		io.to(match.id).emit('player-added', { userId, gameType });
+	if (match) {
+		console.log('Found existing match:', match);
+	} else {
+		console.log('No match found. Creating new match...');
 	}
 
-	console.log(`Match found/created with ID: ${match.id}`);
+	if (match) return match;
 
+	match = await prisma.match.create({
+		data: { gameType, status: MatchStatus.WAITING },
+		include: { groupMembers: true },
+	});
+	io.to(match.id).emit('player-added', { userId, gameType });
 	return match;
 }
 
-async function createGroupMember(
+async function createGroupMemberForMatch(
 	userId: string,
 	matchId: string,
-	gameType: GameType,
 	groupId: string | null
 ) {
-	console.log(`Creating group member for user: ${userId}`);
+	// Check if the record already exists for this user and match
+	const existingGroupMember = await prisma.groupMember.findFirst({
+		where: { userId, matchId },
+	});
 
-	const data: any = {
-		GameType: gameType,
-		user: { connect: { id: userId } },
-		match: { connect: { id: matchId } }, // Connect to the match using relation field
-	};
-
-	if (gameType !== GameType.SOLO) {
-		if (!groupId) {
-			console.error(`No groupId provided for non-SOLO gameType: ${gameType}`);
-			throw new Error(`No groupId provided for non-SOLO gameType: ${gameType}`);
-		}
-		data.group = { connect: { id: groupId } };
+	if (existingGroupMember) {
+		console.log(
+			`Existing group member detected for userId: ${userId}, matchId: ${matchId}`
+		);
+		return;
 	} else {
-		// Fetch the default solo group ID (assuming you've already created it in your database)
-		let defaultSoloGroup = await prisma.group.findFirst({
-			where: { name: 'Default Solo Group' },
-		});
-
-		if (!defaultSoloGroup) {
-			defaultSoloGroup = await prisma.group.create({
-				data: { name: 'Default Solo Group' },
-			});
-		}
-
-		data.group = { connect: { id: defaultSoloGroup.id } };
+		console.log(
+			`No existing group member found for userId: ${userId}, matchId: ${matchId}`
+		);
 	}
 
-	await prisma.groupMember.create({ data });
+	if (!groupId) {
+		console.log('GroupId not provided. Fetching default solo group...');
+		groupId = await getDefaultSoloGroupId();
+	}
+
+	// Check if the user is already a member of the groupId
+	const isMemberOfGroup = await prisma.groupMember.findUnique({
+		where: {
+			userId_groupId: {
+				userId: userId,
+				groupId: groupId,
+			},
+		},
+	});
+
+	if (isMemberOfGroup) {
+		// If the user is already a member of the group, just update the matchId
+		console.log(
+			`Updating group member for userId: ${userId}, matchId: ${matchId}, groupId: ${groupId}`
+		);
+		await prisma.groupMember.update({
+			where: {
+				userId_groupId: {
+					userId: userId,
+					groupId: groupId,
+				},
+			},
+			data: {
+				matchId: matchId,
+			},
+		});
+	} else {
+		console.log(
+			`Creating new group member for userId: ${userId}, matchId: ${matchId}, groupId: ${groupId}`
+		);
+		await prisma.groupMember.create({
+			data: {
+				userId,
+				matchId,
+				groupId,
+			},
+		});
+	}
+}
+
+async function getDefaultSoloGroupId(): Promise<string> {
+	let defaultSoloGroup = await prisma.group.findFirst({
+		where: { name: 'Default Solo Group' },
+	});
+
+	if (defaultSoloGroup) return defaultSoloGroup.id;
+
+	defaultSoloGroup = await prisma.group.create({
+		data: { name: 'Default Solo Group' },
+	});
+	return defaultSoloGroup.id;
 }
 
 router.post('/cancelMatchmaking', async (request, response) => {

@@ -41,24 +41,32 @@ export const MatchmakingProvider: React.FC<PropsI> = ({ children }) => {
 	});
 	const [playerIsReady, setPlayerIsReady] = useState(false);
 	const socketRef = useRef<Socket | null>(null);
-
-	const startMatchmaking = async (gameType: any) => {
+	const startMatchmaking = async (gameType: GameType) => {
 		const user = JSON.parse(localStorage.getItem('userData') || '{}');
-		console.log('user', user);
 
-		if (!user.id)
+		if (!user.id) {
 			throw new Error('You need to login before starting matchmaking');
+		}
 
 		console.log('Iniciando matchmaking para:', gameType);
-		setLoading(true); // Inicia o loading
+		setLoading(true);
+
+		let playersToMatchmake: any[] = [];
+
+		if (gameType === GameType.SOLO) {
+			playersToMatchmake.push(user);
+		} else {
+			// Aqui você deve buscar todos os jogadores do grupo e adicioná-los à lista.
+			// Vou assumir que há uma função getGroupPlayers() que busca os jogadores do grupo.
+			// Esta função precisa ser definida.
+			playersToMatchmake = await getGroupPlayers();
+		}
 
 		try {
-			// Lógica para iniciar o matchmaking
-			// Chama a API do servidor para adicionar o jogador ao matchmaking
 			const response = await apiClient().post(
 				'/matchmaking/addPlayerToMatchmaking',
 				{
-					userId: user.id,
+					players: playersToMatchmake,
 					gameType,
 				}
 			);
@@ -72,10 +80,23 @@ export const MatchmakingProvider: React.FC<PropsI> = ({ children }) => {
 			}
 		} catch (err: any) {
 			console.log('Erro ao chamar API:', err.message);
-
 			// Tratar erros de rede ou outros erros aqui
 		} finally {
 			setLoading(false); // Finaliza o loading
+		}
+	};
+
+	// Exemplo de implementação da função getGroupPlayers, você precisa ajustar conforme sua lógica de negócio.
+	const getGroupPlayers = async () => {
+		const user = JSON.parse(localStorage.getItem('userData') || '{}');
+
+		try {
+			const response = await apiClient().get(`/group/groupOfUser/${user.id}`);
+			const data = JSON.parse(response.data);
+			return data.group.players;
+		} catch (error) {
+			console.error('Failed to fetch group players:', error);
+			return [];
 		}
 	};
 

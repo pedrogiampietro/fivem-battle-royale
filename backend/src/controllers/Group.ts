@@ -1,5 +1,6 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
+import { io } from '../index';
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -86,7 +87,6 @@ router.post('/invite', async (req, res) => {
 	try {
 		const { inviterUserId, invitedUserId } = req.body;
 
-		// Buscar o usuário com base no inviterUserId fornecido
 		const inviter = await prisma.user.findUnique({
 			where: { id: inviterUserId },
 		});
@@ -96,10 +96,8 @@ router.post('/invite', async (req, res) => {
 			return;
 		}
 
-		// Criar o nome do grupo
 		const groupName = `Grupo do ${inviter.personaName}`;
 
-		// Tentar encontrar o grupo existente ou criar um novo
 		let group =
 			(await prisma.group.findFirst({
 				where: { name: groupName },
@@ -129,21 +127,7 @@ router.post('/invite', async (req, res) => {
 			});
 		}
 
-		// Adicione o invitedUser ao groupMembers se ele ainda não for um membro
-		const isInvitedUserAMember = await prisma.groupMember.findUnique({
-			where: { userId_groupId: { userId: invitedUserId, groupId: group.id } },
-		});
-
-		if (!isInvitedUserAMember) {
-			await prisma.groupMember.create({
-				data: {
-					userId: invitedUserId,
-					groupId: group.id,
-				},
-			});
-		}
-
-		// Agora, envie o convite com o grupo criado ou encontrado
+		// Criar o convite sem adicionar o usuário convidado automaticamente ao grupo.
 		const invite = await prisma.invite.create({
 			data: {
 				groupId: group.id,
@@ -152,19 +136,23 @@ router.post('/invite', async (req, res) => {
 			},
 		});
 
+		io.to(invitedUserId).emit('inviteReceived', {
+			groupId: group.id,
+			inviterUserId: inviterUserId,
+		});
+
 		if (!invite) {
 			throw new Error('Failed to send invite.');
 		}
 
 		res.json({ message: 'Invite sent successfully!', groupId: group.id });
 	} catch (error: any) {
-		console.error('Error handling invite:', error); // Log the detailed error
+		console.error('Error handling invite:', error);
 		res
 			.status(500)
-			.json({ error: error.message || 'Failed to handle invite.' }); // Send the error message to the client
+			.json({ error: error.message || 'Failed to handle invite.' });
 	}
 });
-
 //@@ Rota para aceitar um convite: Nesta rota, o usuário convidado (invited) aceita o convite para se juntar a um grupo.
 router.put('/invite/accept/:inviteId', async (req, res) => {
 	try {
@@ -185,6 +173,11 @@ router.put('/invite/accept/:inviteId', async (req, res) => {
 		await prisma.invite.update({
 			where: { id: inviteId },
 			data: { status: 'ACCEPTED' },
+		});
+
+		// Emitir um evento WebSocket para todos os membros do grupo
+		io.to(invite.groupId).emit('newGroupMember', {
+			userId: invite.invitedUserId,
 		});
 
 		await prisma.groupMember.create({
@@ -228,7 +221,7 @@ router.put('/invite/decline/:inviteId', async (req, res) => {
 	}
 });
 
-// @@Rota para obter todos os convites pendentes de um usuário:
+//@@ Rota para obter todos os convites pendentes de um usuário:
 router.get('/invites/:userId', async (req, res) => {
 	try {
 		const { userId } = req.params;
@@ -253,6 +246,7 @@ router.get('/invites/:userId', async (req, res) => {
 	}
 });
 
+//@@ Rota para setar um tipo de partida no grupo
 router.put('/setGameType/:groupId', async (req, res) => {
 	try {
 		const { gameType } = req.body;
@@ -276,6 +270,7 @@ router.put('/setGameType/:groupId', async (req, res) => {
 	}
 });
 
+//@@ Rota para listar os jogadores de um grupo a partir do usuario logado
 router.get('/groupOfUser/:userId', async (req, res) => {
 	try {
 		const { userId } = req.params;
@@ -326,6 +321,45 @@ router.get('/groupOfUser/:userId', async (req, res) => {
 		res
 			.status(500)
 			.json({ error: error.message || 'Failed to fetch group of user.' });
+	}
+});
+
+//@@ Rota para remover um jogador de um grupo
+router.delete('/removeFromGroup', async (req, res) => {
+	try {
+		const { userId, groupId } = req.body;
+
+		// Verificar se o usuário é membro do grupo
+		const groupMember = await prisma.groupMember.findUnique({
+			where: {
+				userId_groupId: { userId, groupId },
+			},
+		});
+
+		if (!groupMember) {
+			return res
+				.status(404)
+				.json({ error: 'User is not a member of this group.' });
+		}
+
+		// Remover o usuário do grupo
+		await prisma.groupMember.delete({
+			where: {
+				userId_groupId: { userId, groupId },
+			},
+		});
+
+		// Emitir um evento WebSocket para todos os membros do grupo
+		io.to(groupId).emit('userLeftGroup', {
+			userId: userId,
+		});
+
+		res.json({ message: 'User removed from the group successfully.' });
+	} catch (error: any) {
+		console.error('Error removing user from group:', error);
+		res
+			.status(500)
+			.json({ error: error.message || 'Failed to remove user from group.' });
 	}
 });
 
