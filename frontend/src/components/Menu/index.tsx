@@ -18,6 +18,7 @@ export const MenuContainer = ({ userData }: any) => {
 		fetchGroupInvitesRequests,
 		acceptGroupRequest,
 		declineGroupRequest,
+		invites,
 	} = useGroupRequest();
 
 	useEffect(() => {
@@ -28,6 +29,10 @@ export const MenuContainer = ({ userData }: any) => {
 		localStorage.clear();
 		window.location.reload();
 	}
+
+	useEffect(() => {
+		console.log('invites', invites);
+	}, [invites]);
 
 	return (
 		<>

@@ -1,9 +1,8 @@
 import styled from 'styled-components';
 
 interface TabProps {
-	active: boolean;
+	$isActive: boolean;
 }
-
 export const GroupSection = styled.section`
 	position: relative;
 	background: rgb(39, 39, 42);
@@ -26,7 +25,7 @@ export const Tab = styled.button<TabProps>`
 	border: none;
 	font-size: 0.75rem;
 	background: ${(props) =>
-		props.active
+		props.$isActive
 			? 'linear-gradient(91.48deg, rgb(123, 47, 253) 0%, rgb(79, 18, 184) 100%)'
 			: '#1c1c1e'};
 	border-radius: 5px 5px 0px 0px;
@@ -34,11 +33,11 @@ export const Tab = styled.button<TabProps>`
 	width: auto;
 	height: 26px;
 	cursor: pointer;
-	color: ${(props) => (props.active ? '#fff' : '#757575')};
+	color: ${(props) => (props.$isActive ? '#fff' : '#757575')};
 
 	&:hover {
 		background: ${(props) =>
-			props.active
+			props.$isActive
 				? 'linear-gradient(91.48deg, rgb(143, 67, 253) 0%, rgb(119, 38, 194) 100%)'
 				: '#1c1c1e'};
 	}

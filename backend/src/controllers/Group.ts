@@ -1,6 +1,6 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
-import { io } from '../index';
+import { io, userSockets } from '../index';
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -103,7 +103,7 @@ router.post('/invite', async (req, res) => {
 				where: { name: groupName },
 			})) ||
 			(await prisma.group.create({
-				data: { name: groupName },
+				data: { name: groupName, status: 'OPEN' },
 			}));
 
 		if (!group) {
@@ -112,7 +112,6 @@ router.post('/invite', async (req, res) => {
 			);
 		}
 
-		// Adicione o inviter ao groupMembers se ele ainda não for um membro
 		const isInviterAMember = await prisma.groupMember.findUnique({
 			where: { userId_groupId: { userId: inviterUserId, groupId: group.id } },
 		});
@@ -127,7 +126,6 @@ router.post('/invite', async (req, res) => {
 			});
 		}
 
-		// Criar o convite sem adicionar o usuário convidado automaticamente ao grupo.
 		const invite = await prisma.invite.create({
 			data: {
 				groupId: group.id,
@@ -136,14 +134,26 @@ router.post('/invite', async (req, res) => {
 			},
 		});
 
-		io.to(invitedUserId).emit('inviteReceived', {
-			groupId: group.id,
-			inviterUserId: inviterUserId,
-		});
-
 		if (!invite) {
 			throw new Error('Failed to send invite.');
 		}
+
+		const socketId = userSockets.get(invitedUserId); // Pega o ID de socket associado ao ID de usuário
+
+		// Emitir o evento de convite para o usuário convidado
+		if (socketId) {
+			io.to(socketId).emit('invite', { message: 'You have been invited!' });
+			res.send('Invite sent!');
+		} else {
+			res.status(404).send('User not found.');
+		}
+
+		// io.emit('invite', {
+		// 	groupId: group.id,
+		// 	inviterName: inviter.personaName,
+		// 	groupName: group.name,
+		// 	inviteId: invite.id,
+		// });
 
 		res.json({ message: 'Invite sent successfully!', groupId: group.id });
 	} catch (error: any) {
@@ -153,6 +163,7 @@ router.post('/invite', async (req, res) => {
 			.json({ error: error.message || 'Failed to handle invite.' });
 	}
 });
+
 //@@ Rota para aceitar um convite: Nesta rota, o usuário convidado (invited) aceita o convite para se juntar a um grupo.
 router.put('/invite/accept/:inviteId', async (req, res) => {
 	try {
@@ -173,11 +184,6 @@ router.put('/invite/accept/:inviteId', async (req, res) => {
 		await prisma.invite.update({
 			where: { id: inviteId },
 			data: { status: 'ACCEPTED' },
-		});
-
-		// Emitir um evento WebSocket para todos os membros do grupo
-		io.to(invite.groupId).emit('newGroupMember', {
-			userId: invite.invitedUserId,
 		});
 
 		await prisma.groupMember.create({
@@ -347,11 +353,6 @@ router.delete('/removeFromGroup', async (req, res) => {
 			where: {
 				userId_groupId: { userId, groupId },
 			},
-		});
-
-		// Emitir um evento WebSocket para todos os membros do grupo
-		io.to(groupId).emit('userLeftGroup', {
-			userId: userId,
 		});
 
 		res.json({ message: 'User removed from the group successfully.' });

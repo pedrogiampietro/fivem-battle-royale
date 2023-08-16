@@ -4,10 +4,10 @@ import { FaCrown } from 'react-icons/fa';
 
 export interface StatusButtonProps
 	extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-	playerReady: boolean;
+	$playerReady: boolean;
 }
 interface CollapseWrapperProps {
-	isOpen: boolean;
+	$isOpen: boolean;
 }
 
 export const GroupSection = styled.section`
@@ -76,7 +76,7 @@ export const AddPlayerBox = styled(PlayerBox)`
 
 export const StatusButton = styled.button<StatusButtonProps>`
 	background: ${(props) =>
-		props.playerReady ? 'rgb(0, 255, 0)' : 'rgb(113, 113, 122)'};
+		props.$playerReady ? 'rgb(0, 255, 0)' : 'rgb(113, 113, 122)'};
 	color: rgb(255, 255, 255);
 	border-radius: 5px;
 	display: flex;
@@ -119,7 +119,7 @@ export const CollapseWrapper = styled.div<CollapseWrapperProps>`
 	border-radius: 10px;
 	box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);
 	${(props) =>
-		props.isOpen &&
+		props.$isOpen &&
 		css`
 			height: auto;
 		`}

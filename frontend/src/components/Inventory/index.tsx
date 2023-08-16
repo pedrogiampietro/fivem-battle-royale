@@ -48,7 +48,7 @@ export const Inventory = () => {
 						<S.Tab
 							key={tabName}
 							onClick={() => handleTabClick(tabName)}
-							active={activeTab === tabName}
+							$isActive={activeTab === tabName}
 						>
 							{tabName}
 						</S.Tab>

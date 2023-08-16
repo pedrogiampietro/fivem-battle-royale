@@ -3,7 +3,6 @@ import * as S from './styles';
 import { FaPlus, FaCheck } from 'react-icons/fa';
 import { useMatchmaking } from '../../contexts/MatchmakingContext';
 import { apiClient } from '../../services/api';
-import { Socket, io } from 'socket.io-client';
 
 export const Group = ({ userData }: any) => {
 	const [expandedCard, setExpandedCard] = useState<number | null>(null);
@@ -14,46 +13,11 @@ export const Group = ({ userData }: any) => {
 	const [isOwner, setIsOwner] = useState<boolean>(false);
 	const [group, setGroup] = useState([]);
 
-	const socketRef = useRef<Socket | null>(null);
-
 	const handleToggleCard = (cardIndex: number) => {
 		setExpandedCard((prevExpandedCard) =>
 			prevExpandedCard === cardIndex ? null : cardIndex
 		);
 	};
-
-	const handleSocketEvents = (socket: Socket) => {
-		socket.on('group-updated', (updatedGroup) => {
-			console.log('Received updated group:', updatedGroup);
-			setGroup(updatedGroup);
-		});
-	};
-
-	useEffect(() => {
-		console.log('Establishing socket connection.');
-
-		// Estabelecendo conexão com o socket
-		socketRef.current = io('http://localhost:5000', {
-			withCredentials: true,
-		});
-
-		socketRef.current.on('connect', () => {
-			console.log('Connected to WebSocket server');
-			handleSocketEvents(socketRef.current!);
-		});
-
-		socketRef.current.on('connect_error', (error) => {
-			console.error('Failed to connect to WebSocket server:', error);
-		});
-
-		return () => {
-			console.log('Disconnecting socket.');
-			if (socketRef.current) {
-				socketRef.current.disconnect();
-				socketRef.current = null;
-			}
-		};
-	}, []);
 
 	useEffect(() => {
 		const fetchGroups = async () => {
@@ -107,18 +71,21 @@ export const Group = ({ userData }: any) => {
 				return;
 			}
 
-			const inviteResponse = await apiClient().post('/group/invite', {
-				inviterUserId: userData.id,
-				invitedUserId: friendData.id,
-			});
-
-			if (inviteResponse.data && inviteResponse.data.message) {
-				alert(inviteResponse.data.message);
-				// Se você quiser armazenar o groupId em algum lugar no front-end:
-				// setCurrentGroup(inviteResponse.data.groupId);
-			} else {
-				console.warn('Failed to send invite:', inviteResponse);
-			}
+			apiClient()
+				.post('/group/invite', {
+					inviterUserId: userData.id,
+					invitedUserId: friendData.id,
+				})
+				.then((response) => {
+					if (response.status === 200) {
+						console.log('Invite sent successfully!', response.data);
+					} else {
+						console.error('Failed to send invite:', response);
+					}
+				})
+				.catch((error) => {
+					console.error('Error sending invite:', error);
+				});
 		} catch (error) {
 			console.error('Failed to send invite:', error);
 		}
@@ -196,7 +163,7 @@ export const Group = ({ userData }: any) => {
 							</div>
 							{player.name === userData.personaName && (
 								<S.StatusButton
-									playerReady={playerIsReady}
+									$playerReady={playerIsReady}
 									onClick={() => {
 										setPlayerIsReady(!playerIsReady);
 									}}
@@ -228,7 +195,7 @@ export const Group = ({ userData }: any) => {
 								</S.InviteIcon>
 							</S.AddPlayerBox>
 							{expandedCard === index && (
-								<S.CollapseWrapper isOpen={expandedCard === index}>
+								<S.CollapseWrapper $isOpen={expandedCard === index}>
 									<S.SearchPlayersContent>
 										<S.HeaderContent>
 											<strong>CONVIDAR</strong>
