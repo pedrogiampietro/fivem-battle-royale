@@ -19,7 +19,9 @@ interface GroupRequestContextData {
 	fetchGroupInvitesRequests: () => void;
 	acceptGroupRequest: (requestId: string) => void;
 	declineGroupRequest: (requestId: string) => void;
-	invites: any;
+	groupPlayers: any;
+	group: any;
+	isOwner: any;
 }
 
 interface PropsI {
@@ -33,7 +35,9 @@ const GroupRequestContext = createContext<GroupRequestContextData>(
 export const GroupRequestProvider: React.FC<PropsI> = ({ children }) => {
 	const [groupRequests, setGroupRequests] = useState<GroupRequest[]>([]);
 	const [userData, setUserData] = useState<any>(null);
-	const [invites, setInvites] = useState<Array<any>>([]);
+	const [groupPlayers, setGroupPlayers] = useState([]);
+	const [group, setGroup] = useState([]);
+	const [isOwner, setIsOwner] = useState<boolean>(false);
 	const socketRef = useRef<Socket | null>(null);
 
 	useEffect(() => {
@@ -50,16 +54,48 @@ export const GroupRequestProvider: React.FC<PropsI> = ({ children }) => {
 		}
 	}, [userData]);
 
+	const fetchGroups = async () => {
+		try {
+			const response = await apiClient().get(
+				`/group/groupOfUser/${userData.id}`
+			);
+
+			const data = JSON.parse(response.data);
+
+			setGroup(data.group);
+
+			const ownerPlayer = data.group.players.find(
+				(player: any) => player.owner
+			);
+
+			if (ownerPlayer && ownerPlayer.id === userData.id) {
+				setIsOwner(true);
+			} else {
+				setIsOwner(false);
+			}
+
+			// Atualize o estado do groupPlayers com a lista de jogadores do grupo
+			setGroupPlayers(data.group.players);
+		} catch (error) {
+			console.error('Failed to fetch groups:', error);
+		}
+	};
+
+	useEffect(() => {
+		fetchGroups();
+	}, [userData]);
+
 	const fetchGroupInvitesRequests = useCallback(async () => {
 		if (!userData) {
+			console.log('No user data found');
 			return;
 		}
 
 		try {
 			const response = await apiClient().get(`/group/invites/${userData.id}`);
-			const data = JSON.parse(response.data);
-			console.log('Fetched group invites:', data);
-			setGroupRequests(data);
+			const apiInvites = JSON.parse(response.data);
+
+			setGroupRequests(apiInvites);
 		} catch (error) {
 			console.error('Failed to fetch group requests:', error);
 		}
@@ -96,7 +132,16 @@ export const GroupRequestProvider: React.FC<PropsI> = ({ children }) => {
 					socket.emit('register', userData?.id); // Registra o ID do usuário no servidor
 
 					socket.on('invite', (data) => {
-						console.log('Received invite event:', data);
+						console.log('Received new invite via WebSocket:', data.message);
+						const newInvite = data.message;
+						setGroupRequests((prevInvites) => [...prevInvites, newInvite]);
+					});
+
+					socket.on('playerJoined', (data) => {
+						console.log('New player joined the group:', data.message);
+
+						// Atualize o estado do grupo para incluir o novo jogador
+						setGroupPlayers(data.message.groupMembers);
 					});
 				}
 			});
@@ -123,7 +168,7 @@ export const GroupRequestProvider: React.FC<PropsI> = ({ children }) => {
 				socketRef.current = null;
 			}
 		};
-	}, [handleSocketEvents]);
+	}, [handleSocketEvents, userData, groupPlayers]);
 
 	return (
 		<GroupRequestContext.Provider
@@ -132,7 +177,9 @@ export const GroupRequestProvider: React.FC<PropsI> = ({ children }) => {
 				fetchGroupInvitesRequests,
 				acceptGroupRequest,
 				declineGroupRequest,
-				invites,
+				groupPlayers,
+				group,
+				isOwner,
 			}}
 		>
 			{children}

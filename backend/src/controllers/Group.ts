@@ -103,7 +103,7 @@ router.post('/invite', async (req, res) => {
 				where: { name: groupName },
 			})) ||
 			(await prisma.group.create({
-				data: { name: groupName, status: 'OPEN' },
+				data: { name: groupName },
 			}));
 
 		if (!group) {
@@ -138,22 +138,21 @@ router.post('/invite', async (req, res) => {
 			throw new Error('Failed to send invite.');
 		}
 
-		const socketId = userSockets.get(invitedUserId); // Pega o ID de socket associado ao ID de usuário
+		const socketId = userSockets.get(invitedUserId);
 
 		// Emitir o evento de convite para o usuário convidado
 		if (socketId) {
-			io.to(socketId).emit('invite', { message: 'You have been invited!' });
-			res.send('Invite sent!');
+			io.to(socketId).emit('invite', {
+				message: {
+					groupId: group.id,
+					inviterName: inviter.personaName,
+					groupName: group.name,
+					inviteId: invite.id,
+				},
+			});
 		} else {
 			res.status(404).send('User not found.');
 		}
-
-		// io.emit('invite', {
-		// 	groupId: group.id,
-		// 	inviterName: inviter.personaName,
-		// 	groupName: group.name,
-		// 	inviteId: invite.id,
-		// });
 
 		res.json({ message: 'Invite sent successfully!', groupId: group.id });
 	} catch (error: any) {
@@ -193,7 +192,60 @@ router.put('/invite/accept/:inviteId', async (req, res) => {
 			},
 		});
 
-		res.json({ message: 'Invite accepted and user added to the group.' });
+		const groupId = invite.groupId;
+		if (groupId) {
+			// Obtenha todos os membros do grupo
+			const groupMembers = await prisma.groupMember.findMany({
+				where: {
+					groupId: groupId,
+				},
+				include: {
+					user: true,
+				},
+			});
+
+			// Get user data
+			const user = await prisma.user.findUnique({
+				where: {
+					id: invite.invitedUserId,
+				},
+			});
+
+			if (!user) {
+				return res.status(404).send('User data not found.');
+			}
+
+			// Emita o evento 'playerJoined' para cada membro do grupo
+
+			groupMembers.forEach((member) => {
+				const socketId = userSockets.get(member.userId);
+				if (socketId) {
+					io.to(socketId).emit('playerJoined', {
+						message: {
+							user: {
+								id: user.id,
+								personaName: user.personaName,
+								avatar: user.avatar,
+							},
+							groupMembers: groupMembers.map((member) => ({
+								id: member.userId,
+								name: member.user.personaName,
+								avatar: member.user.avatar,
+								owner: member.owner,
+							})),
+							groupId: groupId,
+						},
+					});
+				}
+			});
+
+			res.json({
+				message: 'Invite accepted and user added to the group.',
+				userData: user,
+			});
+		} else {
+			res.status(404).send('User not found.');
+		}
 	} catch (error) {
 		res.status(500).json({ error: 'Failed to accept invite.' });
 	}

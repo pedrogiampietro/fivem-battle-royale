@@ -18,7 +18,6 @@ export const MenuContainer = ({ userData }: any) => {
 		fetchGroupInvitesRequests,
 		acceptGroupRequest,
 		declineGroupRequest,
-		invites,
 	} = useGroupRequest();
 
 	useEffect(() => {
@@ -31,8 +30,9 @@ export const MenuContainer = ({ userData }: any) => {
 	}
 
 	useEffect(() => {
-		console.log('invites', invites);
-	}, [invites]);
+		console.log('Group Requests:', groupRequests);
+		console.log('Number of group requests:', groupRequests.length);
+	}, [groupRequests]);
 
 	return (
 		<>
@@ -68,16 +68,20 @@ export const MenuContainer = ({ userData }: any) => {
 
 			<S.GroupRequestCard>
 				{groupRequests.map((request: any) => (
-					<S.GroupRequestItem key={request.id}>
+					<S.GroupRequestItem key={request.inviteId}>
 						<span>
-							{request.inviterUser.personaName} te convidou para o grupo:{' '}
-							{request.group.name}.
+							{request.inviterName} te convidou para o grupo:{' '}
+							{request.groupName}.
 						</span>
 						<S.ActionButtons>
-							<S.AcceptButton onClick={() => acceptGroupRequest(request.id)}>
+							<S.AcceptButton
+								onClick={() => acceptGroupRequest(request.inviteId)}
+							>
 								<FiCheck />
 							</S.AcceptButton>
-							<S.RejectButton onClick={() => declineGroupRequest(request.id)}>
+							<S.RejectButton
+								onClick={() => declineGroupRequest(request.inviteId)}
+							>
 								<FiX />
 							</S.RejectButton>
 						</S.ActionButtons>

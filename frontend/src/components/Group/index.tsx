@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import * as S from './styles';
 import { FaPlus, FaCheck } from 'react-icons/fa';
 import { useMatchmaking } from '../../contexts/MatchmakingContext';
+import { useGroupRequest } from '../../contexts/ManageInvitesContext';
 import { apiClient } from '../../services/api';
 
 export const Group = ({ userData }: any) => {
@@ -9,44 +10,14 @@ export const Group = ({ userData }: any) => {
 	const { playerIsReady, setPlayerIsReady } = useMatchmaking();
 	const [friendList, setFriendList] = useState<string[]>([]);
 	const [searchValue, setSearchValue] = useState('');
-	const [groupPlayers, setGroupPlayers] = useState<any[]>([]);
-	const [isOwner, setIsOwner] = useState<boolean>(false);
-	const [group, setGroup] = useState([]);
+
+	const { groupPlayers, isOwner, group } = useGroupRequest();
 
 	const handleToggleCard = (cardIndex: number) => {
 		setExpandedCard((prevExpandedCard) =>
 			prevExpandedCard === cardIndex ? null : cardIndex
 		);
 	};
-
-	useEffect(() => {
-		const fetchGroups = async () => {
-			try {
-				const response = await apiClient().get(
-					`/group/groupOfUser/${userData.id}`
-				);
-
-				const data = JSON.parse(response.data);
-
-				setGroupPlayers(data.group.players);
-				setGroup(data.group);
-
-				const ownerPlayer = data.group.players.find(
-					(player: any) => player.owner
-				);
-
-				if (ownerPlayer && ownerPlayer.id === userData.id) {
-					setIsOwner(true);
-				} else {
-					setIsOwner(false);
-				}
-			} catch (error) {
-				console.error('Failed to fetch groups:', error);
-			}
-		};
-
-		fetchGroups();
-	}, [userData.id]);
 
 	const handleInviteFriend = async (friendName: string) => {
 		try {
@@ -123,7 +94,7 @@ export const Group = ({ userData }: any) => {
 				const updatedGroupPlayers = groupPlayers.filter(
 					(player) => player.id !== playerId
 				);
-				setGroupPlayers(updatedGroupPlayers);
+				// setGroupPlayers(updatedGroupPlayers);
 			} else {
 				console.warn('Failed to remove player:', response);
 			}
@@ -157,11 +128,12 @@ export const Group = ({ userData }: any) => {
 							<div style={{ display: 'flex', alignItems: 'center' }}>
 								<S.Avatar src={player.avatar} alt='player avatar' />
 								<strong>
-									{player.name === userData.personaName ? 'Você' : player.name}
+									{player.name === userData.name ? 'Você' : player.name}{' '}
+									{/* Alterar para "name" */}
 								</strong>
 								{player.owner && <S.CrownIcon />}
 							</div>
-							{player.name === userData.personaName && (
+							{player.name === userData.name && ( // Alterar para "name"
 								<S.StatusButton
 									$playerReady={playerIsReady}
 									onClick={() => {
@@ -172,7 +144,6 @@ export const Group = ({ userData }: any) => {
 									PRONTO
 								</S.StatusButton>
 							)}
-
 							{isOwner && !player.owner && (
 								<S.RemoveButton
 									onClick={() => handleRemovePlayer(player.id, group?.id)}
