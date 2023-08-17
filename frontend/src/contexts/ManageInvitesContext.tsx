@@ -6,6 +6,7 @@ import React, {
 	useCallback,
 	useRef,
 } from 'react';
+
 import { apiClient } from '../services/api';
 import { Socket, io } from 'socket.io-client';
 
@@ -125,6 +126,14 @@ export const GroupRequestProvider: React.FC<PropsI> = ({ children }) => {
 		[fetchGroupInvitesRequests]
 	);
 
+	const handleSelfRemoval = (groupId: null) => {
+		setGroupPlayers([]);
+		setGroup([]);
+		setIsOwner(false);
+
+		window.location.href = '/';
+	};
+
 	const handleSocketEvents = useCallback(
 		(socket: Socket) => {
 			socket.on('connect', async function () {
@@ -139,9 +148,20 @@ export const GroupRequestProvider: React.FC<PropsI> = ({ children }) => {
 
 					socket.on('playerJoined', (data) => {
 						console.log('New player joined the group:', data.message);
-
 						// Atualize o estado do grupo para incluir o novo jogador
 						setGroupPlayers(data.message.groupMembers);
+					});
+
+					// Adicione este novo listener para o evento playerLeft
+					socket.on('playerLeft', (data) => {
+						console.log('Player left the group:', data.message);
+						// Atualize o estado do grupo para remover o jogador
+						setGroupPlayers(data.message.groupMembers); // Atualize com a nova lista de membros do grupo
+
+						if (data.message.userId === userData.id) {
+							// O jogador removido é o próprio usuário
+							handleSelfRemoval(data.message.groupId);
+						}
 					});
 				}
 			});

@@ -407,6 +407,52 @@ router.delete('/removeFromGroup', async (req, res) => {
 			},
 		});
 
+		// Get all remaining members of the group
+		const remainingGroupMembers = await prisma.groupMember.findMany({
+			where: {
+				groupId: groupId,
+			},
+			include: {
+				user: true,
+			},
+		});
+
+		// Notify the removed player that they have left the group
+		const removedPlayerSocketId = userSockets.get(userId);
+		if (removedPlayerSocketId) {
+			io.to(removedPlayerSocketId).emit('playerLeft', {
+				message: {
+					userId: userId,
+					groupMembers: remainingGroupMembers.map((member) => ({
+						id: member.userId,
+						name: member.user.personaName,
+						avatar: member.user.avatar,
+						owner: member.owner,
+					})),
+					groupId: groupId,
+				},
+			});
+		}
+
+		// Notify the remaining members of the group that a user has left
+		remainingGroupMembers.forEach((member) => {
+			const socketId = userSockets.get(member.userId);
+			if (socketId) {
+				io.to(socketId).emit('playerLeft', {
+					message: {
+						userId: userId,
+						groupMembers: remainingGroupMembers.map((member) => ({
+							id: member.userId,
+							name: member.user.personaName,
+							avatar: member.user.avatar,
+							owner: member.owner,
+						})),
+						groupId: groupId,
+					},
+				});
+			}
+		});
+
 		res.json({ message: 'User removed from the group successfully.' });
 	} catch (error: any) {
 		console.error('Error removing user from group:', error);
