@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios from "axios";
 
 let isRefreshing = false;
 let failedRequestQueue = [];
@@ -6,35 +6,33 @@ let failedRequestQueue = [];
 const limit = 20;
 
 export function apiClient() {
-	const api = axios.create({
-		baseURL: 'http://localhost:5000/',
-		transformResponse: [],
-	});
+  const api = axios.create({
+    baseURL: "http://localhost:5000/",
+    transformResponse: [],
+  });
 
-	api.interceptors.request.use(
-		(request: any) => {
-			if (request.method?.toLowerCase() === 'get') {
-				request.headers.limit = request.headers.limit ?? String(limit);
-			}
+  api.interceptors.request.use(
+    (request: any) => {
+      if (request.method?.toLowerCase() === "get") {
+        request.headers.limit = request.headers.limit ?? String(limit);
+      }
 
-			return request;
-		},
-		(error) => Promise.reject(error)
-	);
+      return request;
+    },
+    (error) => Promise.reject(error)
+  );
 
-	api.interceptors.response.use(
-		(response) => {
-			return response;
-		},
+  api.interceptors.response.use(
+    (response) => {
+      return response;
+    },
 
-		(error) => {
-			// console.log('error:', error.response);
+    (error) => {
+      //TODO
 
-			//TODO
+      return Promise.reject(error);
+    }
+  );
 
-			return Promise.reject(error);
-		}
-	);
-
-	return api;
+  return api;
 }
