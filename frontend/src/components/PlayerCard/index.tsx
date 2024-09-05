@@ -7,7 +7,6 @@ import duoImg from "../../assets/imgs/br-duo.webp";
 import squadImg from "../../assets/imgs/br-squad.webp";
 
 import * as S from "./styles";
-import { apiClient } from "../../services/api";
 import { toast } from "../../lib/toast";
 
 const matchmakings = [

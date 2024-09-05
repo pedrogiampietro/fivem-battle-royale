@@ -49,17 +49,19 @@ export const MenuContainer = ({ userData }: any) => {
         </S.MenuItem>
       </S.MenuContainer>
 
-      <S.AvatarCardContainer>
-        <S.AvatarImage src={userData?.avatar} alt="User Avatar" />
-        <S.AvatarName>{userData?.personaName}</S.AvatarName>
-        <p>Steam ID: {userData?.steamId}</p>
+      {userData && (
+        <S.AvatarCardContainer>
+          <S.AvatarImage src={userData?.avatar} alt="User Avatar" />
+          <S.AvatarName>{userData?.personaName}</S.AvatarName>
+          <p>Steam ID: {userData?.steamId}</p>
 
-        <S.LogoutButton onClick={() => signOut()}>
-          <S.LogoutIconContainer>
-            <FiLogOut size={24} color="#5e39cc" />
-          </S.LogoutIconContainer>
-        </S.LogoutButton>
-      </S.AvatarCardContainer>
+          <S.LogoutButton onClick={() => signOut()}>
+            <S.LogoutIconContainer>
+              <FiLogOut size={24} color="#5e39cc" />
+            </S.LogoutIconContainer>
+          </S.LogoutButton>
+        </S.AvatarCardContainer>
+      )}
 
       <S.GroupRequestCard>
         {groupRequests.map((request: any) => (

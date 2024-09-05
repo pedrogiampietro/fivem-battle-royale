@@ -100,8 +100,6 @@ export const MatchmakingProvider: React.FC<PropsI> = ({ children }) => {
 
     setLoading(true); // Inicia o loading
     try {
-      // Lógica para cancelar o matchmaking
-      // Chama a API do servidor para remover o jogador do matchmaking
       const response = await apiClient().post(
         "/matchmaking/cancelMatchmaking",
         {
@@ -123,10 +121,15 @@ export const MatchmakingProvider: React.FC<PropsI> = ({ children }) => {
   };
 
   const handleSocketEvents = useCallback((socket: Socket) => {
-    socket.on("game-started", (data) => console.log("Game started:", data));
+    socket.on("game-started", (data) => {
+      console.log("Game started:", data);
+      setMatch(data);
+    });
+
     socket.on("player-added", (data) =>
       console.log("A player has been added to the match:", data)
     );
+
     socket.on("player-left", (data) =>
       console.log("A player has left the match:", data)
     );
@@ -134,27 +137,30 @@ export const MatchmakingProvider: React.FC<PropsI> = ({ children }) => {
     socket.on("matchmakingCountersChanged", (data) => {
       console.log("Received matchmakingCountersChanged event:", data);
 
-      // Atualiza os contadores corretamente para cada tipo de jogo
       setMatchmakingCounters((prevCounters) => ({
         SOLO: data.SOLO !== undefined ? data.SOLO : prevCounters.SOLO,
         DUO: data.DUO !== undefined ? data.DUO : prevCounters.DUO,
         SQUAD: data.SQUAD !== undefined ? data.SQUAD : prevCounters.SQUAD,
       }));
     });
+
+    socket.on("match-ready", (data) => {
+      console.log("Match is ready to start:", data);
+      setMatch(data);
+      setPlayerIsReady(true);
+      setIsFindingMatch(false);
+    });
   }, []);
 
   useEffect(() => {
-    console.log("Establishing socket connection.");
+    if (!socketRef.current) {
+      console.log("Establishing socket connection.");
 
-    socketRef.current = io("http://localhost:5000", {
-      withCredentials: true,
-    });
+      socketRef.current = io("http://localhost:5000", {
+        withCredentials: true,
+      });
 
-    handleSocketEvents(socketRef.current);
-
-    if (match) {
-      socketRef.current.emit("game-started", match.id);
-      console.log("Emitting game-started with match id:", match.id);
+      handleSocketEvents(socketRef.current);
     }
 
     return () => {
@@ -164,7 +170,14 @@ export const MatchmakingProvider: React.FC<PropsI> = ({ children }) => {
         socketRef.current = null;
       }
     };
-  }, [match, handleSocketEvents]);
+  }, []); // Removemos `match` como dependência para evitar a reconexão
+
+  useEffect(() => {
+    if (match && match.id) {
+      console.log("Emitting game-started with match id:", match.id);
+      socketRef.current?.emit("game-started", match.id);
+    }
+  }, [match]);
 
   return (
     <MatchmakingContext.Provider
