@@ -4,10 +4,10 @@ import passport from "passport";
 import { Strategy as SteamStrategy } from "passport-steam";
 import cors from "cors";
 import http from "http";
-import { Server, Socket } from "socket.io";
+import { Server } from "socket.io";
 import { PrismaClient } from "@prisma/client";
-import matchMakingController from "./controllers/Matchmaking";
 import groupController from "./controllers/Group";
+import matchMakingRoutes from "./routes/matchmaking.routes";
 
 const prisma = new PrismaClient();
 export const userSockets = new Map();
@@ -15,14 +15,14 @@ const app = express();
 const server = http.createServer(app);
 export const io = new Server(server, {
   cors: {
-    origin: "http://127.0.0.1:5173",
+    origin: "http://localhost:5173",
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   },
 });
 
 const corsOptions = {
-  origin: "http://127.0.0.1:5173",
+  origin: "http://localhost:5173",
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 };
@@ -39,7 +39,7 @@ const steamStrategy = new SteamStrategy(
     realm: "http://localhost:5000/",
     apiKey: "34042001284764C5459C933A1457F0CF",
   },
-  (identifier, profile, done) => {
+  (identifier, profile: any, done) => {
     process.nextTick(() => {
       profile.identifier = identifier;
       return done(null, profile);
@@ -49,7 +49,7 @@ const steamStrategy = new SteamStrategy(
 
 passport.use(steamStrategy);
 passport.serializeUser((user, done) => done(null, user));
-passport.deserializeUser((obj, done) => done(null, obj));
+passport.deserializeUser((obj: any, done) => done(null, obj));
 
 app.use(cors(corsOptions));
 app.use(express.json());
@@ -58,7 +58,7 @@ app.use(session(sessionOptions));
 app.use(passport.initialize());
 app.use(passport.session());
 
-app.use("/matchmaking", matchMakingController);
+app.use("/matchmaking", matchMakingRoutes);
 app.use("/group", groupController);
 
 app.get(
@@ -75,7 +75,7 @@ app.get(
   async (req, res) => {
     const user = await upsertUser(req.user);
     const userData = encodeURIComponent(JSON.stringify(user));
-    res.redirect(`http://127.0.0.1:5173/auth/steam/return?user=${userData}`);
+    res.redirect(`http://localhost:5173/auth/steam/return?user=${userData}`);
   }
 );
 
@@ -93,7 +93,7 @@ io.on("connection", (socket) => {
   });
 });
 
-async function upsertUser(profile) {
+async function upsertUser(profile: any) {
   const { steamid, personaname, avatar, realname } = profile._json;
   const user = await prisma.user.upsert({
     where: { steamId: steamid },
